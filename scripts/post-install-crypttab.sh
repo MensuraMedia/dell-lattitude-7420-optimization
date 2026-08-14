@@ -43,10 +43,10 @@ die()   { red "ABORT: $*"; exit 1; }
 
 cleanup() {
   set +e
-  for d in run sys proc dev/pts dev; do umount "$TARGET/$d" 2>/dev/null; done
-  umount "$TARGET/boot/efi" 2>/dev/null
-  umount "$TARGET/boot" 2>/dev/null
-  umount "$TARGET" 2>/dev/null
+  # Recursive unmount: efivarfs gets auto-mounted under $TARGET/sys/firmware/efi,
+  # which makes a plain `umount $TARGET/sys` fail with EBUSY and leaves the whole
+  # tree half-mounted. -R handles nested mounts; -Rl is the last resort.
+  umount -R "$TARGET" 2>/dev/null || umount -Rl "$TARGET" 2>/dev/null
 }
 trap cleanup EXIT
 
@@ -142,14 +142,32 @@ FAIL=0
 echo -n "  /etc/crypttab has the LUKS UUID ... "
 if grep -q "$LUKS_UUID" "$TARGET/etc/crypttab"; then green "PASS"; else red "FAIL"; FAIL=1; fi
 
-echo -n "  cryptsetup present in initramfs  ... "
+# Enumerate the initramfs ONCE into a variable.
+#
+# Do not pipe lsinitramfs into `grep -q` under `set -o pipefail`: grep -q exits
+# at the first match, closing the pipe, and lsinitramfs then dies with SIGPIPE
+# (141). pipefail propagates that as a pipeline failure, so a match that occurs
+# EARLY in the listing reports as a FAILURE while a late match passes. That
+# produced a false "cryptsetup missing" report (first match at line 1587 of
+# 2256) while the lvm check (line 2137) passed on the same initramfs.
 KVER="$(ls "$TARGET"/boot/initrd.img-* 2>/dev/null | head -1)"
-if [[ -n "$KVER" ]] && lsinitramfs "$KVER" 2>/dev/null | grep -q cryptsetup; then
+INITRAMFS_LIST=""
+if [[ -n "$KVER" ]]; then
+  INITRAMFS_LIST="$(lsinitramfs "$KVER" 2>/dev/null || true)"
+fi
+
+echo -n "  cryptsetup present in initramfs  ... "
+if [[ -n "$INITRAMFS_LIST" ]] && grep -q cryptsetup <<<"$INITRAMFS_LIST"; then
   green "PASS"
 else red "FAIL"; FAIL=1; fi
 
 echo -n "  lvm present in initramfs         ... "
-if [[ -n "$KVER" ]] && lsinitramfs "$KVER" 2>/dev/null | grep -q 'sbin/lvm'; then
+if [[ -n "$INITRAMFS_LIST" ]] && grep -qE '(s?bin)/lvm' <<<"$INITRAMFS_LIST"; then
+  green "PASS"
+else red "FAIL"; FAIL=1; fi
+
+echo -n "  cryptroot hook present           ... "
+if [[ -n "$INITRAMFS_LIST" ]] && grep -q cryptroot <<<"$INITRAMFS_LIST"; then
   green "PASS"
 else red "FAIL"; FAIL=1; fi
 

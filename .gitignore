@@ -1,12 +1,37 @@
-# Never commit unredacted diagnostics — they contain serial numbers,
-# the Dell service tag, MAC addresses and filesystem UUIDs.
-diagnostics/*-unredacted*
-diagnostics/*.raw
+# ─────────────────────────────────────────────────────────────────────────────
+# NEVER COMMIT: LUKS header backups
+#
+# A LUKS header contains the master key, wrapped by your passphrase. Committing
+# one to a repository — especially a PUBLIC one — hands an attacker everything
+# except the passphrase, permanently, in a history that cannot be reliably
+# scrubbed. Anyone who later learns or brute-forces the passphrase can decrypt
+# the disk offline.
+#
+# Header backups belong on OFFLINE EXTERNAL MEDIA. Never here.
+# ─────────────────────────────────────────────────────────────────────────────
+*luks-header*
+*luks-backup*
+*.header
+*.img
+
+# Keys and secrets
 *.key
 *.pem
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
 secrets*
+*password*
+*passphrase*
+
+# Unredacted diagnostics — contain serial numbers, the Dell service tag,
+# MAC addresses and filesystem UUIDs.
+diagnostics/*-unredacted*
+diagnostics/*.raw
 
 # Editor / OS noise
 *~
 *.swp
+*.tmp
 .DS_Store
