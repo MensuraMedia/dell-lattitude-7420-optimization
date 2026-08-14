@@ -63,6 +63,8 @@ corruption found. See [F-01](docs/07-findings-and-risks.md#f-01).
 | **[09 — Installer Reference Table](docs/09-installer-reference-table.md)** | **The Mint installer screen, filled in. Sizes, mount points, format flags — copy at the keyboard.** |
 | [10 — Change Log](docs/10-change-log.md) | Exactly what was executed, with verified before/after state |
 | **[11 — Post-Boot Runbook](docs/11-post-boot-runbook.md)** | **Ordered task list from the end of the installer through full validation** |
+| [12 — Build Log: First Boot](docs/12-build-log-first-boot.md) | First successful LUKS boot through full patching, with findings |
+| [13 — Display & Keyboard Backlight](docs/13-display-and-keyboard-backlight.md) | Kernel 7.0 eDP backlight regression and BIOS keyboard timeout, with root cause and fixes |
 | [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair |
 
 ---
