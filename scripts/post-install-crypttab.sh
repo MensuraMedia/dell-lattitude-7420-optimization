@@ -112,6 +112,30 @@ update-grub
 CHROOT
 
 echo
+bold "=== LUKS HEADER BACKUP ==="
+# The LUKS2 header holds the wrapped master key. If it is damaged, the entire
+# container is unrecoverable regardless of passphrase. Back it up.
+HDR_DIR="$TARGET/root/luks-backup"
+HDR_FILE="$HDR_DIR/luks-header-$(basename "$LUKS_PART").img"
+if [[ -f "$HDR_FILE" ]]; then
+  echo "  header backup already exists at ${HDR_FILE#$TARGET}"
+else
+  mkdir -p "$HDR_DIR"
+  cryptsetup luksHeaderBackup "$LUKS_PART" --header-backup-file "$HDR_FILE"
+  chmod 600 "$HDR_FILE"
+  green "  header backed up to ${HDR_FILE#$TARGET} ✓"
+fi
+echo
+red   "  ⚠️  COPY THIS FILE TO EXTERNAL MEDIA AND KEEP IT OFFLINE."
+echo  "      A header backup on the same disk it protects is useless if that"
+echo  "      disk fails. It is also passphrase-equivalent for an attacker who"
+echo  "      knows your passphrase — store it as you would a key."
+echo
+echo  "      Restore with:"
+echo  "        sudo cryptsetup luksHeaderRestore $LUKS_PART \\"
+echo  "             --header-backup-file luks-header-$(basename "$LUKS_PART").img"
+echo
+
 bold "=== VERIFICATION ==="
 FAIL=0
 
@@ -137,6 +161,9 @@ if grep -qE '\s/boot/efi\s' "$TARGET/etc/fstab"; then green "PASS"; else red "FA
 
 echo -n "  GRUB EFI binary installed        ... "
 if [[ -f "$TARGET/boot/efi/EFI/ubuntu/grubx64.efi" ]]; then green "PASS"; else red "FAIL"; FAIL=1; fi
+
+echo -n "  LUKS header backup taken         ... "
+if [[ -s "$HDR_FILE" ]]; then green "PASS"; else red "FAIL"; FAIL=1; fi
 
 echo
 echo "--- /etc/fstab ---"
