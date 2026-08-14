@@ -1,0 +1,12 @@
+# Never commit unredacted diagnostics — they contain serial numbers,
+# the Dell service tag, MAC addresses and filesystem UUIDs.
+diagnostics/*-unredacted*
+diagnostics/*.raw
+*.key
+*.pem
+secrets*
+
+# Editor / OS noise
+*~
+*.swp
+.DS_Store

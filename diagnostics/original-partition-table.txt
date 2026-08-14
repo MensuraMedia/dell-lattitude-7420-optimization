@@ -1,0 +1,15 @@
+Disk /dev/nvme0n1: 1000215216 sectors, 476.9 GiB
+Model: KBG40ZNS512G NVMe KIOXIA 512GB          
+Sector size (logical/physical): 512/512 bytes
+Disk identifier (GUID): 34400F9E-59F2-416C-BBCD-AF4D5D02B27A
+Partition table holds up to 128 entries
+Main partition table begins at sector 2 and ends at sector 33
+First usable sector is 34, last usable sector is 1000215182
+Partitions will be aligned on 2048-sector boundaries
+Total free space is 4717 sectors (2.3 MiB)
+
+Number  Start (sector)    End (sector)  Size       Code  Name
+   1            2048          206847   100.0 MiB   EF00  Basic data partition
+   2          206848          239615   16.0 MiB    0C01  Microsoft reserved ...
+   3          239616       998580223   476.0 GiB   0700  Basic data partition
+   4       998580224      1000212479   797.0 MiB   2700  
