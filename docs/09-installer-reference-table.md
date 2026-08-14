@@ -19,56 +19,113 @@ reinstall of this machine.
 
 ---
 
-## The installer screen — what to enter
+## The installer screen
 
 Reach it via: **Install Linux Mint → Installation type → Something else → Continue**
 
-### Table 1 — Encrypted build (this machine's actual configuration)
+The screen presents exactly these seven columns, with `+` / `−` / **Change…** buttons
+beneath the list, **New Partition Table…** and **Revert** on the right, and a
+**Device for boot loader installation** dropdown at the bottom:
 
-| Device | Type | Mount point | Format? | Size | Notes |
-|---|---|---|---|---|---|
-| `/dev/nvme0n1p1` | **EFI System Partition** | *(none — auto)* | ☑ **Yes** | 1024 MB | Selecting type "EFI System Partition" removes the mount-point field; it mounts at `/boot/efi` automatically |
-| `/dev/nvme0n1p2` | **Ext4 journaling file system** | `/boot` | ☑ **Yes** | 2147 MB | Unencrypted, holds kernels + initramfs |
-| `/dev/mapper/vg_mint-lv_root` | **Ext4 journaling file system** | `/` | ☑ **Yes** | 128849 MB | Inside LUKS |
-| `/dev/mapper/vg_mint-lv_home` | **Ext4 journaling file system** | `/home` | ☑ **Yes** | 300647 MB | Inside LUKS |
-| `/dev/mapper/vg_mint-lv_swap` | **swap area** | *(none)* | — | 21474 MB | Inside LUKS — hibernation-capable |
-| `/dev/nvme0n1p3` | *(do not touch)* | — | ☐ **No** | 508.8 GB | The LUKS container itself. **Leave it alone** — you assign the mapper devices above, not this. |
+```
+┌──────────────────┬──────┬─────────────┬─────────┬────────┬────────┬────────────────────────┐
+│ Device           │ Type │ Mount point │ Format? │ Size   │ Used   │ System                 │
+├──────────────────┼──────┼─────────────┼─────────┼────────┼────────┼────────────────────────┤
+│ /dev/nvme0n1     │      │             │         │        │        │                        │
+│  free space      │      │             │    ☐    │   1 MB │        │                        │
+│  /dev/nvme0n1p1  │ efi  │             │    ☐    │ 104 MB │ 104 MB │ Windows Boot Manager   │
+│  /dev/nvme0n1p2  │      │             │    ☐    │  16 MB │unknown │                        │
+└──────────────────┴──────┴─────────────┴─────────┴────────┴────────┴────────────────────────┘
+  [ + ] [ − ] [ Change… ]              [ New Partition Table… ] [ Revert ]
 
-> **Device for boot loader installation:** `/dev/nvme0n1` ← **the disk, not a partition**
+  Device for boot loader installation:
+  ┌──────────────────────────────────────────────────────────────────────────────┐
+  │ /dev/nvme0n1   KBG40ZNS512G NVMe KIOXIA 512GB (512.1 GB)                    ▼│
+  └──────────────────────────────────────────────────────────────────────────────┘
+```
 
-The `/dev/mapper/*` devices only appear in the installer **after** the LUKS container
-is opened and the LVM volumes are activated. If the list is empty, go back and run
-`cryptsetup open` and `vgchange -ay` first, then restart the installer.
+> ⚠️ **The layout above is the OLD Windows one** and is what the installer shows if it
+> was opened before the rebuild. The disk no longer looks like this.
+> **Close the installer and relaunch it** to pick up the current partition table —
+> or click **Revert**, which re-reads the disk. If you still see
+> `Windows Boot Manager`, you are looking at a stale view.
+
+**`Size` and `Used` are decimal MB (10⁶), not MiB.** That is why the old 100 MiB ESP
+displayed as `104 MB`. Use the conversion table below.
+
+`Type` shows the *current on-disk* filesystem (`efi`, `ext4`, `ntfs`, `unknown`) — it is
+**not** what you are setting. You set the filesystem in the **Change…** dialog, which
+is also where `Mount point` and `Format?` live. Select a row, click **Change…**, fill in
+the three fields, click **OK**.
 
 ---
 
-### Table 2 — Unencrypted equivalent (if rebuilding without LUKS)
+### Table 1 — Encrypted build ▸ **this machine's actual configuration**
 
-| Device | Type | Mount point | Format? | Size |
-|---|---|---|---|---|
-| `/dev/nvme0n1p1` | EFI System Partition | *(auto)* | ☑ Yes | 1024 MB |
-| `/dev/nvme0n1p2` | Ext4 | `/boot` | ☑ Yes | 2147 MB |
-| `/dev/mapper/vg_mint-lv_root` | Ext4 | `/` | ☑ Yes | 128849 MB |
-| `/dev/mapper/vg_mint-lv_home` | Ext4 | `/home` | ☑ Yes | 300647 MB |
-| `/dev/mapper/vg_mint-lv_swap` | swap area | — | — | 21474 MB |
+Fill in via **Change…** on each row.
+
+| Device | Type | Mount point | Format? | Size | Used | System |
+|---|---|---|---|---|---|---|
+| `/dev/nvme0n1` | | | | | | *(disk header row — not selectable)* |
+| `/dev/nvme0n1p1` | `efi` → **EFI System Partition** | *(none — automatic)* | ☑ **Yes** | **1074 MB** | 1 MB | |
+| `/dev/nvme0n1p2` | `ext4` → **Ext4 journaling file system** | **`/boot`** | ☑ **Yes** | **2147 MB** | 66 MB | |
+| `/dev/nvme0n1p3` | *(blank — LUKS container)* | — | ☐ **No — leave alone** | 508888 MB | unknown | ⚠️ do **not** assign; use the mapper rows |
+| `/dev/mapper/vg_mint-lv_root` | **Ext4 journaling file system** | **`/`** | ☑ **Yes** | **128849 MB** | | |
+| `/dev/mapper/vg_mint-lv_home` | **Ext4 journaling file system** | **`/home`** | ☑ **Yes** | **300648 MB** | | |
+| `/dev/mapper/vg_mint-lv_swap` | **swap area** | *(none)* | — | **21475 MB** | | |
+
+> **Device for boot loader installation:**
+> `/dev/nvme0n1   KBG40ZNS512G NVMe KIOXIA 512GB (512.1 GB)`
+> ← **the disk**, never `/dev/nvme0n1p1`
+
+**If the `/dev/mapper/*` rows are missing**, the LUKS container is not open or the
+volume group is not active. Quit the installer, run the two commands below, then
+relaunch it:
+
+```bash
+sudo cryptsetup open /dev/nvme0n1p3 cryptsystem
+sudo vgchange -ay vg_mint
+```
+
+**Selecting `EFI System Partition` as the Type removes the Mount point field** — that
+is correct. It mounts at `/boot/efi` automatically.
+
+---
+
+### Table 2 — Unencrypted equivalent (same layout, no LUKS)
+
+| Device | Type | Mount point | Format? | Size | Used | System |
+|---|---|---|---|---|---|---|
+| `/dev/nvme0n1p1` | **EFI System Partition** | *(automatic)* | ☑ **Yes** | 1074 MB | | |
+| `/dev/nvme0n1p2` | **Ext4 journaling file system** | `/boot` | ☑ **Yes** | 2147 MB | | |
+| `/dev/mapper/vg_mint-lv_root` | **Ext4 journaling file system** | `/` | ☑ **Yes** | 128849 MB | | |
+| `/dev/mapper/vg_mint-lv_home` | **Ext4 journaling file system** | `/home` | ☑ **Yes** | 300648 MB | | |
+| `/dev/mapper/vg_mint-lv_swap` | **swap area** | *(none)* | — | 21475 MB | | |
 
 > Bootloader device: `/dev/nvme0n1`
 
 ---
 
-### Table 3 — Dual-boot with Windows (reference only, not this build)
+### Table 3 — Dual-boot with Windows ▸ reference only, **not** this build
 
-Included so a future dual-boot reinstall does not have to re-derive it. The critical
-difference is the **ESP must not be formatted** — doing so destroys the Windows Boot
-Manager and Dell's firmware update payloads.
+Kept so a future dual-boot install does not have to re-derive it. Sizes below are the
+factory Windows layout as originally found on this machine.
 
-| Device | Type | Mount point | Format? | Notes |
-|---|---|---|---|---|
-| `/dev/nvme0n1p1` | EFI System Partition | *(auto)* | ☐ **NO — never** | Shared with Windows. **Formatting breaks Windows boot.** |
-| `/dev/nvme0n1p2` | *(Microsoft Reserved)* | — | ☐ No | Leave untouched |
-| `/dev/nvme0n1p3` | *(NTFS — Windows)* | — | ☐ No | Leave untouched |
-| `/dev/nvme0n1p5` | Ext4 / LUKS | `/` | ☑ Yes | The new Linux partition |
-| `/dev/nvme0n1p4` | *(Windows Recovery)* | — | ☐ No | Leave untouched |
+| Device | Type | Mount point | Format? | Size | Used | System |
+|---|---|---|---|---|---|---|
+| `/dev/nvme0n1p1` | `efi` | *(automatic)* | ☐ **NO — NEVER** | 104 MB | 104 MB | **Windows Boot Manager** |
+| `/dev/nvme0n1p2` | *(blank — MSR)* | — | ☐ No | 16 MB | unknown | |
+| `/dev/nvme0n1p3` | `ntfs` | — | ☐ No | 511151 MB | 55000 MB | **Windows 11** |
+| `/dev/nvme0n1p5` | **Ext4** *(or LUKS)* | `/` | ☑ Yes | *(from the shrink)* | | ← the new Linux partition |
+| `/dev/nvme0n1p4` | `ntfs` | — | ☐ No | 836 MB | unknown | *(Windows Recovery)* |
+
+> ⛔ **Formatting the ESP destroys the Windows Boot Manager** and Dell's firmware
+> update payloads in `\EFI\Dell\`. In a dual-boot install the ESP is *used*, never
+> formatted. This is the single most common way people break a working dual-boot.
+>
+> Note the `System` column is how you identify what not to touch — it names
+> `Windows Boot Manager` against the ESP. If that column is populated, another OS is
+> present and you are not doing a clean install.
 
 ---
 
@@ -78,16 +135,25 @@ The Mint installer takes sizes in **MB (decimal, 10⁶)**, while `parted`, `lvcr
 and `lsblk` report **MiB/GiB (binary, 2²⁰/2³⁰)**. Mixing them is the usual reason a
 partition ends up slightly the wrong size.
 
-| Intended | Binary | **Enter in installer (MB)** |
-|---|---|---|
-| 1 GiB (ESP) | 1024 MiB | **1074** |
-| 2 GiB (`/boot`) | 2048 MiB | **2147** |
-| 20 GiB (swap) | 20480 MiB | **21474** |
-| 120 GiB (`/`) | 122880 MiB | **128849** |
-| 280 GiB (`/home`) | 286720 MiB | **300647** |
-| 473.9 GiB (LUKS) | 485274 MiB | **508847** |
+| Intended | Binary | Bytes | **Shown/entered in installer (MB)** |
+|---|---|---:|---|
+| 1 GiB (ESP) | 1024 MiB | 1,073,741,824 | **1074** |
+| 2 GiB (`/boot`) | 2048 MiB | 2,147,483,648 | **2147** |
+| 20 GiB (swap) | 20480 MiB | 21,474,836,480 | **21475** |
+| 120 GiB (`/`) | 122880 MiB | 128,849,018,880 | **128849** |
+| 280 GiB (`/home`) | 286720 MiB | 300,647,710,720 | **300648** |
+| 473.9 GiB (LUKS p3) | 485,274 MiB | 508,887,564,288 | **508888** (508.9 GB) |
+| Whole disk | 476.9 GiB | 512,110,190,592 | **512110** (512.1 GB) |
 
 Formula: `MB = GiB × 1073.741824`
+
+**Proof this matters:** the factory ESP was exactly 100 MiB, and the installer
+displayed it as `104 MB` — visible in the screen layout above. Enter `1024` when you
+mean 1 GiB and you will get a partition 5% smaller than intended.
+
+The whole-disk figure `512.1 GB` is what appears in the bootloader dropdown, which is
+a useful confirmation you are pointed at the right device:
+`/dev/nvme0n1   KBG40ZNS512G NVMe KIOXIA 512GB (512.1 GB)`
 
 > When using `parted` or `lvcreate` directly (as this build does), **always suffix the
 > unit** — `1025MiB`, `-L 120G`. Unsuffixed numbers are interpreted inconsistently
