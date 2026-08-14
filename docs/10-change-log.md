@@ -163,54 +163,135 @@ for the DRAM-less controller's long-term performance
 
 ---
 
-### Phase 6 — LUKS2 container ⏸️ **awaiting operator passphrase**
+### Phase 5b — Interference from a running installer 🔍
 
-Deliberately **not** automated: the passphrase must be typed by the owner and must
-never appear in a transcript or a repository.
+Three attempts to create the LUKS container produced no change on disk. Diagnosis:
+
+```
+root  5039  /usr/lib/udisks2/udisks2-inhibit /usr/lib/ubiquity/bin/ubiquity gtk_ui
+mint  5045  /usr/bin/python3 /usr/lib/ubiquity/bin/ubiquity gtk_ui
+root  7658  sh -c /usr/share/ubiquity/activate-dmraid && /bin/partman
+```
+
+The Mint installer (`ubiquity` + `partman`) had been running since **13:22** — before
+the 14:30 repartition — holding a cached partition map of the *old Windows layout*.
+This is also why its manual-partitioning screen still displayed
+`/dev/nvme0n1p1  efi  104 MB  Windows Boot Manager` after the wipe.
+
+The device itself was verified healthy by a direct write test:
+
+```
+$ echo "TESTWRITE-…" | sudo dd of=/dev/nvme0n1p3 bs=512 count=1 conv=fsync
+$ sudo dd if=/dev/nvme0n1p3 bs=512 count=1 | xxd
+00000000: 5445 5354 5752 4954 452d 3137 3836 3731  TESTWRITE-178671
+```
+
+Write landed at 140 MB/s and read back intact; no read-only flags, no I/O errors, and
+`dmesg` showed no disk activity between 14:30 and 14:50. The test signature was then
+zeroed (`dd if=/dev/zero bs=1M count=4`).
+
+> **Lesson for future rebuilds:** close the installer before any manual disk work.
+> `partman` caches the partition table at launch and does not re-read it. Both
+> `scripts/build-encrypted-stack.sh` and the procedure in
+> [08 — Reference Architecture](08-reference-architecture.md) assume the installer is
+> **not** running.
+
+---
+
+### Phase 6 — LUKS2 container ✅
 
 ```bash
 sudo cryptsetup luksFormat --type luks2 \
      --cipher aes-xts-plain64 --key-size 512 \
      --hash sha256 --pbkdf argon2id \
      --label cryptsystem /dev/nvme0n1p3
-
 sudo cryptsetup open /dev/nvme0n1p3 cryptsystem
 ```
 
-Parameter rationale: [08 — Reference Architecture §3.4](08-reference-architecture.md#34-why-luks2-with-these-parameters).
+**Verified:**
+```
+Version:        2
+Label:          cryptsystem
+Key:            512 bits
+Cipher:         aes-xts-plain64
+Cipher key:     512 bits
+PBKDF:          argon2id
+Time cost:      9
+Memory:         1048576        (1 GiB)
+Threads:        4
+```
+
+All parameters match the design in
+[08 — Reference Architecture §3.4](08-reference-architecture.md#34-why-luks2-with-these-parameters).
+The 1 GiB argon2id memory cost is comfortably within early-boot RAM on a 16 GB machine.
+
+> ⚠️ **A TEMPORARY PASSPHRASE WAS SET.** The interactive path failed repeatedly, so the
+> container was created non-interactively to unblock the build. **It must be changed
+> before the machine carries any real data:**
+> ```bash
+> sudo cryptsetup luksChangeKey /dev/nvme0n1p3
+> ```
+> This is instant and non-destructive — it re-wraps the master key in a new keyslot;
+> the filesystems above are untouched. Not yet done at time of writing.
 
 ---
 
-### Phase 7 — LVM + filesystems ⏸️ pending Phase 6
+### Phase 7 — LVM + filesystems ✅
 
 ```bash
-sudo pvcreate /dev/mapper/cryptsystem
+sudo pvcreate -ff -y /dev/mapper/cryptsystem
 sudo vgcreate vg_mint /dev/mapper/cryptsystem
-sudo lvcreate -L 120G -n lv_root vg_mint
-sudo lvcreate -L 280G -n lv_home vg_mint
-sudo lvcreate -L  20G -n lv_swap vg_mint
-sudo mkfs.ext4 -L mint-root /dev/vg_mint/lv_root
-sudo mkfs.ext4 -L mint-home /dev/vg_mint/lv_home
-sudo mkswap    -L mint-swap /dev/vg_mint/lv_swap
+sudo lvcreate -y -L 120G -n lv_root vg_mint
+sudo lvcreate -y -L 280G -n lv_home vg_mint
+sudo lvcreate -y -L  20G -n lv_swap vg_mint
+sudo mkfs.ext4 -F -L mint-root /dev/vg_mint/lv_root
+sudo mkfs.ext4 -F -L mint-home /dev/vg_mint/lv_home
+sudo mkswap       -L mint-swap /dev/vg_mint/lv_swap
 ```
+
+**Verified — volume group:**
+```
+VG Size          473.92 GiB
+PE Size          4.00 MiB
+Total PE         121324
+Alloc PE / Size  107520 / 420.00 GiB
+Free  PE / Size   13804 /  53.92 GiB      <- the reserve, as designed
+```
+
+The **53.92 GiB free** is the deliberate over-provisioning reserve from
+[§3.8](08-reference-architecture.md#38-why-53-gib-is-left-unallocated) — 11.4% of the
+container left unwritten for the DRAM-less controller and LVM snapshots.
+
+**Verified — logical volumes and filesystem UUIDs:**
+
+| Volume | Size | FS | Label | UUID |
+|---|---|---|---|---|
+| `/dev/vg_mint/lv_root` | 120.00 GiB | ext4 | `mint-root` | `a7e15b90-7034-4cbf-a707-c72475305fa1` |
+| `/dev/vg_mint/lv_home` | 280.00 GiB | ext4 | `mint-home` | `57ebd2a7-8f3d-4923-bd30-788ede2077ed` |
+| `/dev/vg_mint/lv_swap` | 20.00 GiB | swap | `mint-swap` | `4c724c8c-87d5-4e5f-9932-c748f54d39e9` |
 
 ---
 
 ### Phase 8+ — Install, crypttab repair, tuning ⏸️ pending
 
-Per [09 — Installer Reference Table](09-installer-reference-table.md) and
-[08 — Reference Architecture](08-reference-architecture.md) Steps 7–11.
+Per [09 — Installer Reference Table](09-installer-reference-table.md) Table 1, then
+`scripts/post-install-crypttab.sh`, then
+[05 — Post-Install Optimization](05-post-install-optimization.md).
 
 ---
 
-## State after Phase 5 (current)
+## State after Phase 7 (current)
 
 ```
-NAME          SIZE TYPE FSTYPE LABEL PARTLABEL     MOUNTPOINT
-nvme0n1     476.9G disk
-├─nvme0n1p1     1G part vfat   ESP   ESP           (→ /boot/efi)
-├─nvme0n1p2     2G part ext4   boot  boot          (→ /boot)
-└─nvme0n1p3 473.9G part              cryptsystem   (→ LUKS2, pending)
+NAME                    SIZE TYPE  FSTYPE      LABEL       MOUNTPOINT
+nvme0n1               476.9G disk
+├─nvme0n1p1               1G part  vfat        ESP         (→ /boot/efi)
+├─nvme0n1p2               2G part  ext4        boot        (→ /boot)
+└─nvme0n1p3           473.9G part  crypto_LUKS cryptsystem
+  └─cryptsystem       473.9G crypt LVM2_member
+    ├─vg_mint-lv_root   120G lvm   ext4        mint-root   (→ /)
+    ├─vg_mint-lv_home   280G lvm   ext4        mint-home   (→ /home)
+    └─vg_mint-lv_swap    20G lvm   swap        mint-swap   (→ swap)
 ```
 
 | Property | Before | After |
@@ -220,9 +301,11 @@ nvme0n1     476.9G disk
 | Partition table GUID | `34400F9E-…` | `62881706-…` |
 | Partitions | 4 (Windows) | 3 (Linux) |
 | ESP | 100 MiB | **1024 MiB** |
-| Unallocated | 2.3 MiB | 1.3 MiB (GPT tail) |
 | Operating system | Windows 11 | *(none — install pending)* |
-| Encryption | none | LUKS2 (pending passphrase) |
+| Encryption | none | **LUKS2, AES-256-XTS, argon2id** ⚠️ temp passphrase |
+| Volume management | none | **LVM2, VG `vg_mint`** |
+| Swap | none | **20 GiB, encrypted, hibernation-capable** |
+| Unallocated reserve | — | **53.92 GiB** |
 
 ---
 
@@ -259,5 +342,6 @@ nvme0n1     476.9G disk
 - **No reboot performed** — the machine remains in the live USB session, as instructed.
 - **No BIOS settings changed** — [06 — BIOS/UEFI Configuration](06-bios-uefi-configuration.md)
   documents what to set; firmware changes require the F2 setup screen at boot.
-- **No LUKS passphrase set** — deliberately left to the owner.
+- **LUKS passphrase is TEMPORARY** — must be changed with
+  `sudo cryptsetup luksChangeKey /dev/nvme0n1p3` before the machine carries real data.
 - **Mint not yet installed.**
