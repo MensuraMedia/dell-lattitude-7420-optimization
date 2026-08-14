@@ -39,6 +39,7 @@ corruption found. See [F-01](docs/07-findings-and-risks.md#f-01).
 | If you want to… | Read |
 |---|---|
 | **Fill in the Mint installer screen** | **[09 — Installer Reference Table](docs/09-installer-reference-table.md)** |
+| **Know what to do after the installer** | **[11 — Post-Boot Runbook](docs/11-post-boot-runbook.md)** |
 | **Build the machine** | **[08 — Reference Architecture](docs/08-reference-architecture.md)** |
 | See what was already done to this disk | [10 — Change Log](docs/10-change-log.md) |
 | Know what's wrong with it | [07 — Findings & Risk Register](docs/07-findings-and-risks.md) |
@@ -61,7 +62,8 @@ corruption found. See [F-01](docs/07-findings-and-risks.md#f-01).
 | **[08 — Reference Architecture](docs/08-reference-architecture.md)** | **The build. Target design, rationale, procedure, validation.** |
 | **[09 — Installer Reference Table](docs/09-installer-reference-table.md)** | **The Mint installer screen, filled in. Sizes, mount points, format flags — copy at the keyboard.** |
 | [10 — Change Log](docs/10-change-log.md) | Exactly what was executed, with verified before/after state |
-| [scripts/](scripts/) | Read-only, serial-redacting diagnostic collector |
+| **[11 — Post-Boot Runbook](docs/11-post-boot-runbook.md)** | **Ordered task list from the end of the installer through full validation** |
+| [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair |
 
 ---
 
