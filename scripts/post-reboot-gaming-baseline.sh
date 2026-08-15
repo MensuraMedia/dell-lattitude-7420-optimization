@@ -19,9 +19,13 @@
 #   5 report         compare every run against the baseline
 #
 # Everything is measured, nothing is assumed. See:
+#   docs/19-gaming-cooling-runbook.md           (THE ORDER — start here)
 #   docs/16-thermal-and-power-architecture.md   (mechanism)
 #   docs/17-cooling-optimization.md             (data + procedure)
 #   docs/18-adversarial-review-log.md           (why the earlier numbers were wrong)
+#
+# Not sure where you are? Run scripts/gaming-handoff.sh first — it reports state
+# and prints the exact next command.
 #
 set -uo pipefail
 

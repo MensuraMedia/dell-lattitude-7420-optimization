@@ -181,8 +181,40 @@ row "platform_profile final choice" "$(pend)"
 note "cool vs performance(UltraPerformance) vs balanced — reviewers disagree and"
 note "NEITHER position has valid steady-state data. Settle with the A/B, not argument."
 
-# ──────────────────────────────────────────────────────── 7. next command
-hdr "7. What to run next"
+# ────────────────────────────────────────────────── 7. runbook progress
+# Mirrors docs/19-gaming-cooling-runbook.md. Keep the two in step.
+hdr "7. Runbook progress — docs/19 (all 13 steps)"
+LAUNCH_OK=0
+[[ -n "${CFG:-}" ]] && grep -q 'MANGOHUD=1 gamemoderun' "${CFG:-/dev/null}" 2>/dev/null && LAUNCH_OK=1
+AB_DONE=0
+for p in balanced cool performance; do [[ -d "$LOG_DIR/ab-$p" ]] && AB_DONE=$((AB_DONE+1)); done
+
+printf '  %s-- Phase 0: blocks everything --%s\n' "$C" "$N"
+row " 0  log out and back in"            "$([[ $BLOCKED -eq 0 ]] && done_ || blok)"
+printf '  %s-- Phase A: restore measurement capability --%s\n' "$C" "$N"
+row " 1  run gaming-handoff.sh"          "$(done_)"
+row " 2  re-apply hwp_dynamic_boost"     "$([[ "$HWP" == "1" ]] && done_ || pend)"
+row " 3  set Steam launch options"       "$([[ $LAUNCH_OK -eq 1 ]] && done_ || pend)"
+printf '  %s-- Phase B: establish the baseline --%s\n' "$C" "$N"
+row " 4  capture FPS baseline"           "$([[ -n "$BASE" ]] && done_ || pend)"
+printf '  %s-- Phase C: A/B the platform profiles --%s\n' "$C" "$N"
+row " 5  A/B runs captured ($AB_DONE/3)" "$([[ $AB_DONE -ge 3 ]] && done_ || pend)"
+row " 6  read the report"                "$([[ -f $STATE_DIR/phase && $(cat $STATE_DIR/phase) == report ]] && done_ || pend)"
+printf '  %s-- Phase D: decide and persist --%s\n' "$C" "$N"
+row " 7  apply winning profile"          "$([[ $AB_DONE -ge 3 ]] && pend || printf 'waiting on step 5')"
+row " 8  resolve platform-profile unit"  "$(systemctl is-enabled platform-profile-cool.service &>/dev/null && pend || done_)"
+printf '  %s-- Phase E: owner decisions --%s\n' "$C" "$N"
+row " 9  battery charge policy"          "$([[ "$BATCFG" == "Custom" ]] && done_ || pend)"
+row "10  perf_event_paranoid decision"   "$([[ "$PAR" -le 2 ]] && done_ || pend)"
+printf '  %s-- Phase F: after the baseline exists --%s\n' "$C" "$N"
+row "11  load-management utility"        "$([[ -x /usr/local/bin/perfmode ]] && done_ || pend)"
+row "12  physical: repaste + fin clean"  "$(pend)"
+row "13  replace the battery"            "$(pend)"
+echo
+note "full runbook with commands and verification: docs/19-gaming-cooling-runbook.md"
+
+# ──────────────────────────────────────────────────────── 8. next command
+hdr "8. What to run next"
 if [[ $BLOCKED -eq 1 ]]; then
   printf '  %s1.%s log out and back in  (or reboot)\n' "$B" "$N"
   printf '  %s2.%s %s%s/scripts/gaming-handoff.sh%s\n' "$B" "$N" "$B" "$REPO_DIR" "$N"
@@ -200,6 +232,10 @@ echo
 note "or just run it with no argument to auto-advance through every phase:"
 printf '      %s%s/scripts/post-reboot-gaming-baseline.sh%s\n' "$B" "$REPO_DIR" "$N"
 echo
-note "reading: docs/16 (concepts) · docs/17 (data + procedure) · docs/18 (review)"
+note "reading order:"
+note "  docs/19 — THE RUNBOOK: ordered steps, commands, verification  <- start here"
+note "  docs/16 — concepts: how power/heat are actually governed"
+note "  docs/17 — data: measurements, applied config, procedure"
+note "  docs/18 — review: what was wrong, and the alternates not taken"
 note "PR awaiting merge: https://github.com/MensuraMedia/dell-lattitude-7420-optimization/pull/1"
 echo
