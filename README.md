@@ -72,7 +72,7 @@ corruption found. See [F-01](docs/07-findings-and-risks.md#f-01).
 | [16 — Thermal & Power Architecture](docs/16-thermal-and-power-architecture.md) | How power and heat are governed: MSR vs MMIO RAPL, EC fan ownership, `platform_profile` as a BIOS token, measurement pitfalls |
 | [17 — Cooling Optimization](docs/17-cooling-optimization.md) | Measured thermal/power data under gaming load, applied configuration, reproducible procedure |
 | [18 — Adversarial Review Log](docs/18-adversarial-review-log.md) | Two independent reviews of the cooling work: what survived verification, what did not, and the alternates not taken |
-| [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair, backlight handoff, gaming baseline harness |
+| [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair, backlight handoff, gaming baseline harness, gaming handoff report |
 
 ---
 

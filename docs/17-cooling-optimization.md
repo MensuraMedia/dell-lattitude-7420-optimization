@@ -280,7 +280,11 @@ The two reviews disagree, and **neither position rests on valid steady-state dat
 | `cool` (current) | Demonstrably lower NVMe temperature under forced airflow. But the fan **never stops**, which is continuous bearing wear and faster dust ingestion. |
 
 **This must be settled by the controlled A/B in §5, not by argument.**
-See `scripts/post-reboot-gaming-baseline.sh`.
+
+```bash
+./scripts/gaming-handoff.sh                    # where am I? what runs next?
+./scripts/post-reboot-gaming-baseline.sh       # auto-advance through every phase
+```
 
 ---
 
