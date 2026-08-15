@@ -65,7 +65,8 @@ corruption found. See [F-01](docs/07-findings-and-risks.md#f-01).
 | **[11 — Post-Boot Runbook](docs/11-post-boot-runbook.md)** | **Ordered task list from the end of the installer through full validation** |
 | [12 — Build Log: First Boot](docs/12-build-log-first-boot.md) | First successful LUKS boot through full patching, with findings |
 | [13 — Display & Keyboard Backlight](docs/13-display-and-keyboard-backlight.md) | Kernel 7.0 eDP backlight regression and BIOS keyboard timeout, with root cause and fixes |
-| [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair |
+| [14 — Backlight Architecture](docs/14-backlight-architecture.md) | How backlight control works end to end: PWM pin vs DPCD AUX, interface selection, firmware ownership, diagnostic method |
+| [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair, backlight handoff |
 
 ---
 

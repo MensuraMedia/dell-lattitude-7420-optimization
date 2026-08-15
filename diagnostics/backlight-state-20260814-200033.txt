@@ -1,0 +1,74 @@
+════════════════════════════════════════════════════════════════
+  Dell Latitude 7420 — backlight state snapshot
+  generated 2026-08-14T20:00:33-04:00
+════════════════════════════════════════════════════════════════
+
+══ 1. Identity ══
+  model                                  Latitude 7420
+  BIOS                                   1.50.1
+  kernel                                 7.0.0-28-generic
+  cmdline                                BOOT_IMAGE=/vmlinuz-7.0.0-28-generic root=/dev/mapper/vg_mint-lv_root ro quiet splash
+  GRUB default                           GRUB_CMDLINE_LINUX_DEFAULT="quiet splash i915.enable_dpcd_backlight=0"
+
+══ 2. Display backlight (sysfs) ══
+  -- /sys/class/backlight/intel_backlight/
+       type                              raw
+       scale                             unknown
+       brightness                        1023
+       actual_brightness                 1023
+       max_brightness                    1023
+       bl_power                          0
+
+══ 3. Panel DPCD (ground truth, over AUX) ══
+  0x721 BL_CONTROL_MODE      = 0x08  (PWM pin)
+  0x722/23 brightness        = 0x03FF (1023)
+  0x724 PWMGEN_BIT_COUNT     = 10      (implies max_brightness 1023)
+  0x728 FREQ_SET             = 132
+        -> PWM frequency     ~ 199.8 Hz
+  0x340 Intel HDR block      = all zero (interface UNSUPPORTED)
+
+══ 4. i915 parameters ══
+    enable_dpcd_backlight                -1
+    enable_psr                           -1
+    enable_psr2_sel_fetch                Y
+    enable_fbc                           -1
+    enable_dc                            -1
+    invert_brightness                    0
+    enable_panel_replay                  -1
+
+══ 5. Keyboard backlight (kernel LED class) ══
+    brightness                           1
+    max_brightness                       2
+    stop_timeout                         63h
+    start_triggers                       +keyboard +touchpad
+
+══ 6. Dell BIOS attributes (authoritative over the OS) ══
+    KbdBacklightTimeoutAc                Never
+    KbdBacklightTimeoutBatt              Never
+    KeyboardIllumination                 Dim
+    PowerWarn                            Disabled
+    ThermalLogClear                      Keep
+    ThermalManagement                    Optimized
+    Admin password enabled               0
+
+══ 7. DRM connectors / PSR ══
+    /sys/class/drm/card1-DP-1            disconnected
+    /sys/class/drm/card1-DP-2            disconnected
+    /sys/class/drm/card1-eDP-1           connected
+    /sys/class/drm/card1-HDMI-A-1        disconnected
+    /sys/class/drm/card1-HDMI-A-2        disconnected
+    /sys/class/drm/card1-HDMI-A-3        disconnected
+
+══ 8. X11 view (informational — can mask the truth) ══
+  eDP-1 connected primary 1920x1080+0+0 (0x49) normal (normal left inverted right x axis y axis) 309mm x 174mm
+  	Gamma:      1.0:1.0:1.0
+  	Brightness: 1.0
+
+══ 9. systemd saved backlight state ══
+    pci-0000:00:02.0:backlight:intel_backlight 923 0 
+    platform-dell-laptop:leds:dell::kbd_backlight 2 
+
+══ 10. Power delivery (context for thermal/power theories) ══
+    AC online                            1
+    BAT0 status                          Full
+    ucsi-source-psy-USBC000:002          15V x 3A = 45W
