@@ -145,7 +145,8 @@ fi
 step "5. noatime in fstab"
 if grep -qE '^[^#].*\s/\s+ext4.*noatime' /etc/fstab; then skip; else
   if [[ $DRY -eq 1 ]]; then echo; echo "    [dry-run] add noatime to / /home /boot"; else
-    cp /etc/fstab "/etc/fstab.bak.$(date +%s)"
+    FSTAB_BAK="/etc/fstab.bak.$(date +%s)"
+    cp /etc/fstab "$FSTAB_BAK"
     # add noatime to ext4 lines for / /home /boot that lack it
     awk '{
       if ($0 !~ /^#/ && $3 == "ext4" && ($2=="/" || $2=="/home" || $2=="/boot") && $4 !~ /noatime/) {
@@ -153,7 +154,25 @@ if grep -qE '^[^#].*\s/\s+ext4.*noatime' /etc/fstab; then skip; else
       }
       print
     }' OFS='\t' /etc/fstab > /tmp/fstab.new && mv /tmp/fstab.new /etc/fstab
-    if findmnt -n / >/dev/null; then ok; else red "CHECK /etc/fstab"; fi
+    # A malformed fstab strands an encrypted root in an emergency shell, so
+    # validate here rather than discovering it at the next boot.
+    if ! findmnt --verify --fstab >/dev/null 2>&1; then
+      cp "$FSTAB_BAK" /etc/fstab
+      red "fstab did not validate — rolled back from $FSTAB_BAK"
+    else
+      # Editing fstab changes nothing until a remount. The old check was
+      # 'findmnt -n /', which only asks whether / is mounted at all — always
+      # true — so this step reported OK while / /home /boot stayed relatime.
+      for m in / /home /boot; do mount -o remount "$m" >/dev/null 2>&1; done
+      MISSED=""
+      for m in / /home /boot; do
+        # No pipe into grep -q here: see docs/12 on pipefail + SIGPIPE
+        # turning a successful match into a false negative.
+        MOPTS=$(awk -v t="$m" '$2==t {print $4}' /proc/mounts)
+        [[ "$MOPTS" == *noatime* ]] || MISSED="$MISSED $m"
+      done
+      [[ -z "$MISSED" ]] && ok || red "fstab written but not live on:$MISSED"
+    fi
   fi
   NOTES+=("fstab modified (backup at /etc/fstab.bak.*) — verify with: findmnt -o TARGET,OPTIONS / /home")
 fi
@@ -230,8 +249,10 @@ CPU_BOOST_ON_BAT=0
 PCIE_ASPM_ON_AC=default
 PCIE_ASPM_ON_BAT=powersupersave
 
-INTEL_GPU_MIN_FREQ_ON_AC=100
-INTEL_GPU_MIN_FREQ_ON_BAT=100
+# INTEL_GPU_MIN_FREQ_* is deliberately unset. 100 MHz is already gt_RPn_freq_mhz
+# (the hardware minimum) so it bought nothing, and setting MIN without MAX makes
+# TLP 1.6 reject the whole config with:
+#   Error in configuration at INTEL_GPU_MAX_FREQ_ON_AC="": frequency invalid
 
 WIFI_PWR_ON_AC=off
 WIFI_PWR_ON_BAT=on
@@ -246,10 +267,38 @@ EOF
 fi
 [[ $NEW_BATTERY -eq 0 ]] && NOTES+=("Charge threshold left at ${STOP}% — the current battery is at ~23.6% health, so capping it would leave under an hour. Re-run with --new-battery after replacing it.")
 
+# Writing the TLP keys is not the same as the hardware honouring them. On this
+# machine `tlp-stat -b` reports "Plugin: generic / Supported features: none
+# available", so START/STOP_CHARGE_THRESH_BAT0 are inert and the firmware's own
+# cap stands. Verify against sysfs and apply directly if TLP did not.
+CCE=/sys/class/power_supply/BAT0/charge_control_end_threshold
+step "   charge threshold honoured"
+if [[ $DRY -eq 1 ]]; then echo; echo "    [dry-run] verify charge stop = ${STOP}"
+elif [[ -w "$CCE" ]]; then
+  CUR=$(cat "$CCE" 2>/dev/null)
+  if [[ "$CUR" != "$STOP" ]]; then
+    echo "$STOP" > "$CCE" 2>/dev/null
+    CUR=$(cat "$CCE" 2>/dev/null)
+  fi
+  if [[ "$CUR" == "$STOP" ]]; then
+    green "${CUR}%"
+    NOTES+=("Charge stop threshold applied directly to sysfs (TLP's battery plugin reports no threshold support on this Dell). This does NOT survive a reboot — set it in BIOS > Power > Battery Configuration to make it durable.")
+  else
+    yellow "asked ${STOP}, hardware reports ${CUR} — firmware is enforcing its own"
+    NOTES+=("Charge threshold could not be set to ${STOP}: hardware reports ${CUR}. Change it in BIOS > Power > Battery Configuration.")
+  fi
+else yellow "n/a"; fi
+
 step "   battery health"
-if [[ -r /sys/class/power_supply/BAT0/energy_full_design ]]; then
-  D=$(cat /sys/class/power_supply/BAT0/energy_full_design)
-  F=$(cat /sys/class/power_supply/BAT0/energy_full)
+# This platform exposes charge_* (mAh), not energy_* (uWh). Testing only for
+# energy_full_design made F-01 -- the most consequential finding in the whole
+# build -- silently report "n/a" on the one machine it describes.
+BATD=/sys/class/power_supply/BAT0
+D=""; F=""
+if   [[ -r $BATD/energy_full_design ]]; then D=$(cat $BATD/energy_full_design); F=$(cat $BATD/energy_full)
+elif [[ -r $BATD/charge_full_design ]]; then D=$(cat $BATD/charge_full_design); F=$(cat $BATD/charge_full)
+fi
+if [[ -n "$D" && "${D:-0}" -gt 0 ]]; then
   PCT=$(( F * 100 / D ))
   if [[ $PCT -lt 50 ]]; then red "${PCT}% of design — REPLACE (F-01)"; NOTES+=("Battery at ${PCT}% of design health — hardware replacement required (F-01)")
   else green "${PCT}% of design"; fi

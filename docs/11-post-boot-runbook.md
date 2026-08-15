@@ -110,6 +110,7 @@ the Mint desktop. That prompt appearing is proof steps 2–4 worked.
 | **8** | C | thermald | 2 min | Tiger Lake sustained-load cliff |
 | **9** | C | TLP + charge thresholds | 10 min | 14.6 Wh battery — every watt counts |
 | **10** | D | VA-API hardware video | 5 min | Video on CPU is a large needless drain |
+| **10b** | D | Display brightness control | 2 min | FN keys and the slider do nothing until this is set |
 | **11** | E | Firmware updates | 10 min | Do **before** TPM enrolment |
 | **12** | E | Secure Boot | 10 min | Must precede TPM PCR 7 binding |
 | **13** | E | TPM auto-unlock | 5 min | Last — depends on 11 and 12 |
@@ -399,6 +400,45 @@ Confirm in `about:support` → *Media* → decoder should report hardware.
 
 ---
 
+### 10b. Display brightness control
+
+On kernel 7.0 the panel comes up very dim and the FN brightness keys and Cinnamon
+slider do nothing. `i915` selects the DisplayPort AUX (DPCD) backlight interface,
+which this eDP panel ignores, so `intel_backlight` accepts every write while
+`actual_brightness` never moves the panel.
+
+Full root-cause analysis is in
+**[13 — Display and Keyboard Backlight](13-display-and-keyboard-backlight.md)**; the
+mechanism, and why the OS reports success throughout, is in
+**[14 — Backlight Architecture](14-backlight-architecture.md)**. Doc 13 also covers the
+keyboard backlight timeout, which is a firmware setting rather than a kernel one.
+
+Force the driver back to the native PWM interface:
+
+```bash
+sudo cp /etc/default/grub /etc/default/grub.bak.$(date +%s)
+sudo sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 i915.enable_dpcd_backlight=0"/' /etc/default/grub
+sudo update-grub
+sudo reboot
+```
+
+**Verify** after reboot — press the FN brightness keys, then:
+
+```bash
+grep -o 'i915[^ ]*' /proc/cmdline
+cat /sys/class/backlight/intel_backlight/{actual_brightness,max_brightness}
+```
+
+`actual_brightness` must track the key presses. On this machine `max_brightness` is
+`96000`.
+
+> ⚠️ **This parameter shares `GRUB_CMDLINE_LINUX_DEFAULT` with `resume=` from step 14.**
+> Append to that line, never overwrite it. Losing `resume=` breaks hibernation; losing
+> `i915.enable_dpcd_backlight=0` takes the backlight controls out with it. Check the
+> full line after any step that touches GRUB.
+
+---
+
 # Phase E — Boot security
 
 **Order matters. 11 → 12 → 13.** Firmware updates and Secure Boot both change TPM PCR
@@ -552,7 +592,7 @@ echo "--- thermals ---";                         sensors | grep -E 'Package|Comp
 | LVM free | > 50 GiB |
 | TRIM | `fstrim.timer` enabled, `DISC-MAX` non-zero |
 | Swap | zram priority 100, `lv_swap` lower, total ≥ 20 GiB |
-| **GDS** | **not `Vulnerable`** |
+| **GDS** | **not `Vulnerable`, _or_ documented as firmware-limited** — see [12 §3](12-build-log-first-boot.md#3-gds--downfall-is-unreachable-via-apt) and [15 §5](15-build-log-post-boot-tuning.md#5-gds-is-now-formally-closed). On this machine it is firmware-limited and cannot pass. |
 | Charge threshold | `80` (or `100` until the battery is replaced) |
 | Secure Boot | `SecureBoot enabled` |
 | TPM | a `tpm2` token listed |
