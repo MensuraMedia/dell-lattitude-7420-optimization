@@ -345,3 +345,86 @@ nvme0n1               476.9G disk
 - **LUKS passphrase is TEMPORARY** — must be changed with
   `sudo cryptsetup luksChangeKey /dev/nvme0n1p3` before the machine carries real data.
 - **Mint not yet installed.**
+
+---
+
+## 2026-08-15 — Gaming stack, cooling optimization, adversarial review
+
+**Environment:** installed system (no longer live USB). Mint 22.3 Cinnamon,
+kernel 7.0.0-28-generic, BIOS 1.50.1, X11, AC power. LUKS+LVM on NVMe.
+
+**Rollback point:** Timeshift RSYNC snapshot `2026-08-15_05-03-29`
+("pre-steam-install"), verified — 587,493 files, 14 GB, `/home/user` excluded.
+Restore with `sudo timeshift --restore --snapshot 2026-08-15_05-03-29`.
+
+> Snapshots live on `/home/timeshift`, i.e. the same LUKS container on the same
+> NVMe. Protects against a bad package or config; **not** against drive failure.
+
+### Installed
+
+| Package | Purpose |
+|---|---|
+| `steam-installer` 1:1.0.0.79~ds-2 | Native Steam (199 pkgs, 498 MB, i386 multiarch) |
+| `mangohud` 0.6.9.1 | Frame/power overlay (**amd64 only** — `mangohud:i386` absent from noble) |
+| `intel-gpu-tools` 1.28 | Required by MangoHud to read Intel GPU stats |
+| `libgamemodeauto0:i386` 1.8.1 | Stops 32-bit LD_PRELOAD errors in the Steam chain |
+
+Verified `mesa-vulkan-drivers` / `libgl1-mesa-dri` at **25.2.8** on *both* amd64 and
+i386, and the shared `intel_icd.json` resolving per-arch via a relative
+`library_path`. Age of Empires: DE (AppID 1017900, 12.93 GB) installed and launched
+under Proton Experimental + DXVK.
+
+### Configuration applied
+
+| Change | File / knob | Note |
+|---|---|---|
+| Lock-screen / greeter background | `/etc/lightdm/slick-greeter.conf` | Image placed in `/usr/share/backgrounds/` — `/home/user` is `750` and unreadable by `lightdm` |
+| gamemode tuning | `/etc/gamemode.ini` | `desiredgov=powersave` is a **no-op**, retained only to suppress gamemode's `performance` default; `defaultgov` deliberately unset |
+| `gamemode` group | `usermod -aG gamemode user` | Grants `RLIMIT_NICE` via `limits.d/10-gamemode.conf` — **needs re-login** |
+| Compositor unredirect | `org.cinnamon.muffin unredirect-fullscreen-windows=true` | Was `false`; fullscreen games were composited every frame |
+| `hwp_dynamic_boost` | `/sys/devices/system/cpu/intel_pstate/` | `0` → `1`; not persistent across reboot |
+| Platform profile | `platform_profile=cool` | Writes BIOS token `ThermalManagement=Cool`; **provisional** — see [17 §7](17-cooling-optimization.md) |
+
+### Reverted / corrected during the session
+
+- **`MESA_SHADER_CACHE_MAX_SIZE=10G`** added to `/etc/environment`, then **removed**.
+  Inert three ways (pam_env applies at login; `steamclient.so` sets the variable
+  itself; foz cache mode ignores size eviction). Real shader working set: **8.7 MB**.
+- **`platform-profile-cool.service`** installed with `WantedBy=suspend.target` —
+  those targets activate *before* sleep, not after resume. The BIOS token also
+  appears self-persistent, so the unit may be redundant entirely. **Left in place
+  pending one reboot to confirm.**
+- **Launch options** corrected from `gamemoderun mangohud %command%` to
+  **`MANGOHUD=1 gamemoderun %command%`** — the `mangohud` wrapper's `$LIB` expands
+  to `i386-linux-gnu` for the 32-bit half of the Steam chain, where the library
+  does not exist.
+
+### Measurement corrections
+
+The session's central power model was **wrong** and was corrected by review:
+
+| Claimed | Actual |
+|---|---|
+| "18.7 W sustained cap" | **18.75 W is the MMIO short-term limit.** Sustained is ~28–30 W (`intel-rapl-mmio:0`) |
+| "DXVK_state_cache populating" | **0 files** — DXVK 2.x removed it |
+| "shader cache proves compile stutter" | 659 MB of 668 MB is `transcoded_video.foz` — **video, not shaders** |
+| "act < cur proves GPU idle" | `gt_act_freq_mhz` reads **0** in RC6; a steady 750 MHz means awake and **clamped** |
+
+Full detail in [18 — Adversarial Review Log](18-adversarial-review-log.md).
+
+### Added
+
+- `docs/16-thermal-and-power-architecture.md` — mechanism and concepts
+- `docs/17-cooling-optimization.md` — measurements, applied config, procedure
+- `docs/18-adversarial-review-log.md` — review findings and alternates not taken
+- `scripts/post-reboot-gaming-baseline.sh` — resumable FPS baseline + profile A/B harness
+
+### Outstanding
+
+| Priority | Item |
+|---|---|
+| 🔴 | **Battery charge policy** — TLP's `START_CHARGE_THRESH_BAT0=95` is **silently inert**; sysfs reports 50/100 because `PrimaryBattChargeCfg=Adaptive` makes custom values read-only. Cell is at 23.6% health and held at 100% SoC. See [17 §6](17-cooling-optimization.md) and [F-01](07-findings-and-risks.md#f-01). |
+| 🟠 | **No FPS baseline exists** — all GPU-saturation conclusions are inference |
+| 🟠 | `platform_profile` final selection — pending controlled A/B at steady state |
+| 🟡 | `perf_event_paranoid=4` blocks `intel_gpu_top` for non-root; MangoHud GPU fields stay blank until lowered to 2 (security tradeoff) |
+| 🟡 | Confirm whether `platform-profile-cool.service` is needed at all |

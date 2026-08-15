@@ -45,6 +45,8 @@ corruption found. See [F-01](docs/07-findings-and-risks.md#f-01).
 | Know what's wrong with it | [07 — Findings & Risk Register](docs/07-findings-and-risks.md) |
 | Set the BIOS correctly | [06 — BIOS/UEFI Configuration](docs/06-bios-uefi-configuration.md) |
 | Tune it after installing | [05 — Post-Install Optimization](docs/05-post-install-optimization.md) |
+| Understand cooling and power limits | [16 — Thermal & Power Architecture](docs/16-thermal-and-power-architecture.md) |
+| Optimize cooling / measure gaming load | [17 — Cooling Optimization](docs/17-cooling-optimization.md) |
 
 ---
 
@@ -67,7 +69,10 @@ corruption found. See [F-01](docs/07-findings-and-risks.md#f-01).
 | [13 — Display & Keyboard Backlight](docs/13-display-and-keyboard-backlight.md) | Kernel 7.0 eDP backlight regression and BIOS keyboard timeout, with root cause and fixes |
 | [14 — Backlight Architecture](docs/14-backlight-architecture.md) | How backlight control works end to end: PWM pin vs DPCD AUX, interface selection, firmware ownership, diagnostic method |
 | [15 — Build Log: Post-Boot Tuning](docs/15-build-log-post-boot-tuning.md) | Runbook steps 5–16 applied; four tooling defects found and fixed |
-| [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair, backlight handoff |
+| [16 — Thermal & Power Architecture](docs/16-thermal-and-power-architecture.md) | How power and heat are governed: MSR vs MMIO RAPL, EC fan ownership, `platform_profile` as a BIOS token, measurement pitfalls |
+| [17 — Cooling Optimization](docs/17-cooling-optimization.md) | Measured thermal/power data under gaming load, applied configuration, reproducible procedure |
+| [18 — Adversarial Review Log](docs/18-adversarial-review-log.md) | Two independent reviews of the cooling work: what survived verification, what did not, and the alternates not taken |
+| [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair, backlight handoff, gaming baseline harness |
 
 ---
 
