@@ -75,7 +75,7 @@ corruption found. See [F-01](docs/07-findings-and-risks.md#f-01).
 | [18 — Adversarial Review Log](docs/18-adversarial-review-log.md) | Two independent reviews of the cooling work: what survived verification, what did not, and the alternates not taken |
 | **[19 — Gaming & Cooling Runbook](docs/19-gaming-cooling-runbook.md)** | **Ordered task list from the next reboot onward: 13 steps, commands, verification, and which script runs each** |
 | [20 — Fan & Cooling Hardware](docs/20-fan-and-cooling-hardware.md) | Fan spec and measured capability, health assessment method and verdict, replaceability, airflow diagram, and every logical/physical cooling option with evidence |
-| [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair, backlight handoff, gaming baseline harness, gaming handoff report, aggressive cooling control |
+| [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair, backlight handoff, gaming baseline harness, gaming handoff report, aggressive cooling control, thermal decay test |
 
 ---
 

@@ -118,6 +118,69 @@ reacting to it will do more good than any steady-state profile choice.
 > (the fan had not spun down before the second arm, and the load failed to apply)
 > and its result is discarded. This remains an open question.
 
+### 2.4 ⚠️ The tachometer is not reliable — corroborate before trusting it
+
+`fan1_input` produced **mutually contradictory readings** during testing:
+
+- A 60 s load run reported **exactly `0` RPM for all 20 samples** while the
+  package climbed 40 °C → 63 °C.
+- A direct read moments later, on the same `hwmon` node, returned **4302–4398 RPM**
+  while the machine was *cooling*.
+- A clean characterization run showed a smooth, plausible 1250 → 4720 RPM ramp.
+
+The fan is definitively working (§2.3, §2.5). But **any conclusion resting on RPM
+alone is suspect on this platform.** `dell_smm_hwmon` reads via SMM calls, which
+are slow, serialised, and can contend with other SMM consumers.
+
+**Corroborate with §2.5 (thermal decay) before drawing conclusions from RPM.**
+
+### 2.5 Thermal decay — measuring cooling without the tachometer
+
+Airflow *is* the rate at which heat leaves the package. Measuring the temperature
+decay after load removal is a direct physical measure of cooling performance and
+needs no fan sensor at all.
+
+Run with `scripts/thermal-decay-test.sh`.
+
+| Profile | Hot plateau | to −5 °C | to −10 °C | Initial slope |
+|---|---|---|---|---|
+| `performance` | 59 °C | **2 s** | **20 s** | **0.70 °C/s** |
+| `quiet` | 52 °C | — | — | **0.00 °C/s** |
+
+`performance` sheds heat at 0.70 °C/s; `quiet` shows no measurable decay in 70 s.
+
+> **Confound, stated plainly:** the arms began at different plateaus (59 vs 52 °C)
+> because `quiet` also caps package power and never got as hot. A smaller gradient
+> means less driving force for cooling, so part of the gap is expected. The
+> *direction* is solid; the *magnitude* is inflated.
+
+This method is the recommended way to compare cooling changes on this machine —
+repaste, fin-stack cleaning, elevation, cooling pads — because it measures the
+outcome rather than a proxy.
+
+### 2.6 Power source changes everything
+
+Thermal testing on battery is meaningless. TLP's battery profile
+(`/etc/tlp.d/01-latitude-7420.conf`) transforms the machine:
+
+| | On AC | On battery |
+|---|---|---|
+| `no_turbo` | 0 | **1** (`CPU_BOOST_ON_BAT=0`) |
+| EPP | `balance_performance` | `balance_power` |
+| Clock at 100% load | ~2800–3500 MHz | **locked 1499 MHz** |
+| Package power | 13–25 W | **6.76 W** |
+| MMIO PL1 | 30 W | **15 W** |
+| Fan under full load | ramps to ~4700 RPM | **0 RPM** |
+
+At 99.7% CPU busy on battery the package draws 6.76 W, reaches only 43 °C, and
+the fan never needs to spin. **Always confirm `AC online: 1` before any thermal
+measurement**, or the result describes TLP's power policy rather than the cooling
+system.
+
+> ⚠️ With the battery at 23.6% of design health ([F-01](07-findings-and-risks.md#f-01)),
+> running a sustained CPU burn on battery is also a genuine crash risk — a
+> degraded cell cannot hold voltage under a sudden current step.
+
 ---
 
 ## 3. Fan health assessment
@@ -133,6 +196,7 @@ standalone health script.
 | 2 | **Stability** | RPM variance at max — bearing wear, obstruction | <2% |
 | 3 | **Ramp** | Time from low idle to 95% under sudden load | see caveat |
 | 4 | **Effectiveness** | °C per watt — fin-stack dust, paste condition | <75 °C at load |
+| 5 | **Thermal decay** | Cooling rate, **tachometer-independent** (§2.5) | >0.5 °C/s |
 
 ### 3.2 Results — 2026-08-15
 
