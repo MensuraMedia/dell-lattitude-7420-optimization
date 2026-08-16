@@ -42,6 +42,12 @@ this chassis exposes a single cooling device with a single tachometer.
 
 ### 2.1 Speed range by ACPI platform profile
 
+> ⚠️ **These figures were taken on a heat-soaked machine and the "idle" column is
+> NOT a true cold idle.** Profiles were tested back-to-back without allowing the
+> fan to spin down between them, so the idle readings are a hot plateau. See
+> §2.3 for the corrected cold-start behaviour. The *load* column and the relative
+> ordering between profiles remain valid.
+
 8-thread `sha256sum /dev/zero` burn, turbostat parsed **by column name**.
 
 | Profile | BIOS token | Idle RPM | Load RPM | Pkg W | Pkg °C | NVMe °C |
@@ -74,6 +80,43 @@ PEAK OBSERVED  4731 RPM
 DMI NOMINAL    4800 rpm
              = 98.6% of manufacturer spec
 ```
+
+### 2.3 The real fan curve — and its lag
+
+Measured from a **genuine cold idle** on `performance` (fan allowed to fully spin
+down first), then full load applied:
+
+| Time | Fan RPM | Pkg °C |
+|---|---|---|
+| idle (settled) | **1174–1889** | 39–42 |
+| L+6 s | 1492 | 50 |
+| L+12 s | 1160 | 62 |
+| L+24 s | 1684 | **69** ← temperature peak |
+| L+30 s | 2205 | 61 |
+| L+36 s | 3086 | 62 |
+| L+48 s | 4288 | 62 |
+| L+60 s | **4658** | 62 |
+
+**Two conclusions that matter:**
+
+1. **The fan DOES track temperature.** At true cold idle on `performance` it sits
+   near **1200–1900 RPM**, not the ~4700 plateau reported in §2.1. The earlier
+   "flat per profile" reading was an artifact of back-to-back testing on a
+   machine that never cooled down.
+
+2. **The EC ramp lags the heat by roughly a minute.** Package temperature peaked
+   at **69 °C while the fan was still turning only 1684 RPM**. The fan reached
+   full speed about 60 s after load onset — by which time the CPU had already
+   ridden out its own thermal excursion and settled back to 62 °C.
+
+That lag is the single most actionable cooling characteristic on this chassis: the
+fan is not weak, it is **late**. Anything that anticipates load rather than
+reacting to it will do more good than any steady-state profile choice.
+
+> **Untested:** whether toggling `platform_profile` forces the EC to re-evaluate
+> and jump the fan early. A first attempt at measuring this was **confounded**
+> (the fan had not spun down before the second arm, and the load failed to apply)
+> and its result is discarded. This remains an open question.
 
 ---
 
@@ -307,6 +350,8 @@ Ordered by benefit-per-risk.
 For this specific machine, on 2026-08-15:
 
 1. **The fan is healthy** — 98.6% of nominal, 0.24% variance. Not the problem.
+   It is not weak, it is **late**: ~60 s to reach full speed, during which the
+   package can transiently reach 69 °C. See §2.3.
 2. **`performance` is the max-airflow profile** and delivers ~400 RPM more than
    any other, at both idle and load.
 3. **`cool` should not be mistaken for a cooling profile.** It cuts power 41% and
