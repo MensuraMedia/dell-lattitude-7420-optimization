@@ -14,15 +14,32 @@
 #   more air lowers every one of those temperatures whether or not any counter
 #   ever moves. That is the whole justification for this policy.
 #
-# MEASURED FAN BEHAVIOUR (2026-08-15, BIOS 1.50.1, 8-thread sha256 burn)
-#   profile      idle RPM   load RPM   pkg W   pkg C   NVMe C
-#   quiet          3513       4024     11.18     55     37.9
-#   cool           4292       4288      7.96     47     36.9
-#   balanced       4292       4306     14.35     62     39.9
-#   performance    4714       4697     13.44     61     40.9    <- MAX AIRFLOW
+# MEASURED FAN BEHAVIOUR (2026-08-15/16, BIOS 1.50.1, 8-thread sha256 burn, ON AC)
+#   profile      load RPM   pkg W   pkg C   NVMe C
+#   quiet          4024      11.18    55      37.9
+#   cool           4288       7.96    47      36.9
+#   balanced       4306      14.35    62      39.9
+#   performance    4697      13.44    61      40.9    <- MAX AIRFLOW
 #
-#   Sustained max-RPM test on 'performance': peak 4720 RPM (98.3% of the declared
-#   4800 fan1_max), holding 4692-4720 RPM across 180 s.
+#   Sustained max-RPM test on 'performance': peak 4731 RPM (98.6% of the 4800 rpm
+#   DMI type-27 nominal), 0.24% variance -> mechanically healthy fan.
+#
+#   THE FAN IS LATE, NOT WEAK. From a true cold start on 'performance':
+#     idle ~1250 RPM @ 40 C | L+22s 1558 RPM @ 70 C (peak heat, fan barely moved)
+#     L+40s 3737 RPM        | L+66s 4720 RPM @ 62 C (full speed ~66s after load)
+#   Package rides to 70 C before airflow meaningfully responds. This is the
+#   chassis's real cooling deficiency and the EC ramp rate is not adjustable.
+#
+#   Idle RPM is NOT flat per profile -- earlier readings claiming that were taken
+#   on a heat-soaked machine that never spun down between tests. See docs/20 §2.3.
+#
+#   TACHOMETER IS UNRELIABLE: fan1_input has reported 0 RPM through a 23 C rise,
+#   then 4300 RPM seconds later. Corroborate with scripts/thermal-decay-test.sh,
+#   which measures cooling physically and needs no fan sensor. See docs/20 §2.4.
+#
+#   POWER SOURCE MATTERS: on battery, TLP sets no_turbo=1 and halves MMIO PL1 to
+#   15 W, so the package draws 6.76 W at 100% busy, reaches 43 C, and the fan
+#   never spins. Confirm AC online:1 before any thermal test. See docs/20 §2.6.
 #
 #   NOTE ON 'cool': it reaches a low temperature by CUTTING PACKAGE POWER to
 #   7.96 W, not by cooling harder. That starves the iGPU (throttle_reason_pl1 was
@@ -109,13 +126,29 @@ cmd_verify(){
   local p rpm mx pct
   p=$(cat "$PP"); rpm=$(fan_rpm); mx=$(fan_max)
   [[ "$p" == "$PROFILE_MAX" ]] && ok "profile is '$PROFILE_MAX'" || bad "profile is '$p', expected '$PROFILE_MAX'"
-  if [[ -n "$rpm" && -n "$mx" && "$mx" -gt 0 ]]; then
-    pct=$(python3 -c "print(f'{$rpm/$mx*100:.1f}')" 2>/dev/null)
-    say "fan: $rpm / $mx RPM  (${pct}% of declared maximum)"
-    # Idle RPM differs by profile on this chassis: cool/balanced ~4292, perf ~4714.
-    if [[ "$rpm" -ge 4600 ]]; then ok "fan is in the max-airflow band (>=4600 RPM)"
-    elif [[ "$rpm" -ge 4200 ]]; then warn "fan at $rpm — below the 'performance' band; EC may still be ramping"
-    else warn "fan at $rpm — unexpectedly low; check the profile actually applied"; fi
+  # The tachometer is unreliable on this platform (docs/20 §2.4): it has reported
+  # 0 RPM through a 23 C rise, then 4300 RPM seconds later. Sample several times
+  # and interpret against temperature and load rather than trusting one read.
+  if [[ -n "$mx" && "$mx" -gt 0 ]]; then
+    local samples="" best=0 r
+    for _ in 1 2 3 4 5; do
+      r=$(fan_rpm); samples="$samples ${r:-0}"
+      [[ "${r:-0}" -gt "$best" ]] && best=$r
+      sleep 1
+    done
+    local t; t=$(pkg_c); t=${t%.*}
+    pct=$(python3 -c "print(f'{$best/$mx*100:.1f}')" 2>/dev/null)
+    say "fan samples:$samples  (best $best / $mx RPM = ${pct}%)"
+    say "package: ${t}C"
+    if   [[ "$best" -ge 4600 ]]; then ok "fan is in the max-airflow band (>=4600 RPM)"
+    elif [[ "${t:-0}" -lt 55 ]]; then
+      ok "fan low, but package is only ${t}C — the EC has nothing to remove yet."
+      say "  This is CORRECT behaviour, not a fault. The fan ramps with heat and"
+      say "  reaches full speed ~66s after sustained load (docs/20 §2.3)."
+    elif [[ "$best" -eq 0 ]]; then
+      warn "all samples read 0 at ${t}C — likely the known tachometer fault (docs/20 §2.4)"
+      say "  Confirm with scripts/thermal-decay-test.sh, which needs no fan sensor."
+    else warn "fan $best RPM at ${t}C — below expectation; verify with thermal-decay-test.sh"; fi
   fi
   say ""
   say "direct fan control (expected to fail — recorded for completeness):"
