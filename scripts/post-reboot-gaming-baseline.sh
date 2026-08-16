@@ -225,7 +225,12 @@ PY
 
 # One measured run: arm MangoHud logging, prompt the operator to play, collect.
 do_run(){ # do_run <label> <profile|->
-  local label="$1" prof="$2" rundir="$LOG_DIR/$label"
+  # NOTE: these must be SEPARATE statements. `local a="$1" b="$LOG_DIR/$a"` expands
+  # every argument before any assignment lands, so $a is still unbound when $b is
+  # built — fatal under `set -u`.
+  local label="$1"
+  local prof="$2"
+  local rundir="$LOG_DIR/$label"
   mkdir -p "$rundir"
 
   if [[ "$prof" != "-" ]]; then
@@ -252,10 +257,26 @@ do_run(){ # do_run <label> <profile|->
      count. An unrepeatable workload makes the whole comparison meaningless.
   3. MangoHud starts logging automatically and stops after ${RUN_SECONDS}s.
      (~${SOAK_SECONDS}s of that is warm-up and is discarded.)
-  4. Leave the game running until this script says it is finished.
+  4. After pressing ENTER you get a 10s countdown — ALT-TAB BACK TO THE GAME.
+     A de-focused window throttles its render loop and the sample is worthless.
+  5. Do not touch this terminal again until the script says it is finished.
 
 EOF
-  read -r -p "  press ENTER once the game is loaded and you are IN the scenario… " _ </dev/tty
+  if [[ -r /dev/tty ]]; then
+    read -r -p "  press ENTER once the game is loaded and you are IN the scenario… " _ </dev/tty
+  else
+    info "no tty available — starting immediately"
+  fi
+
+  # CRITICAL: the operator is looking at a terminal right now, which means the game
+  # window is de-focused and most titles throttle background rendering. Sampling
+  # immediately would measure a backgrounded game. Give them time to switch back.
+  echo
+  for i in $(seq 10 -1 1); do
+    printf "\r  %sSWITCH BACK TO THE GAME NOW%s — sampling starts in %2ds " "$c_y" "$c_0" "$i"
+    sleep 1
+  done
+  printf "\r  %-64s\n" "sampling started."
 
   info "sampling for ${RUN_SECONDS}s…"
   sample_thermals "$rundir/thermals.csv" "$RUN_SECONDS" &
