@@ -428,3 +428,50 @@ Full detail in [18 — Adversarial Review Log](18-adversarial-review-log.md).
 | 🟠 | `platform_profile` final selection — pending controlled A/B at steady state |
 | 🟡 | `perf_event_paranoid=4` blocks `intel_gpu_top` for non-root; MangoHud GPU fields stay blank until lowered to 2 (security tradeoff) |
 | 🟡 | Confirm whether `platform-profile-cool.service` is needed at all |
+
+---
+
+## 2026-08-16 — Camera subsystem characterisation
+
+**Scope:** read-only investigation of the integrated webcam. **No persistent system
+change was made.** Full detail in [21 — Camera & Imaging Subsystem](21-camera-and-imaging.md).
+
+**Environment:** installed system (not live USB), kernel 7.0.0-28-generic, BIOS 1.50.1.
+
+### Executed
+
+| Action | Persistent? |
+|---|---|
+| `apt-get install -y v4l-utils` — required tooling, absent on stock Mint 22.3 | **Yes** (package only) |
+| `v4l2-ctl -c exposure_dynamic_framerate=0` then `=1` — A/B framerate test | **No** — restored to as-found value `1` |
+| Two single-frame captures to verify the pipeline | **No** — `shred`-deleted; only dimensions, pixel format and luminance statistics were read, no image content inspected |
+| Sustained + concurrent stream tests | **No** — all frames written to `/dev/null` |
+
+### Measured
+
+- **Dual-sensor device confirmed:** two UVC functions behind one USB device —
+  `if 0+1` → `/dev/video0` RGB, `if 2+3` → `/dev/video2` IR 8-bit greyscale.
+  `/dev/video1` and `/dev/video3` are metadata-only nodes.
+- **1080p framerate defect reproduced:** 22 fps with `exposure_dynamic_framerate=1`
+  (as found) versus **30 fps** with it disabled. The UVC default for this control is
+  `0`; this unit reports `1`.
+- **RGB and IR stream concurrently** without contention.
+- Camera access is granted by **systemd-logind per-seat ACL**, not `video` group
+  membership — the operator account is not in `video`.
+- USB runtime autosuspend is active and already optimal (`suspended`, 2000 ms delay).
+
+### Added
+
+- `docs/21-camera-and-imaging.md` — full subsystem characterisation, findings F-C1…F-C7
+- `scripts/camera-diagnostics.sh` — read-only collector; redacts the webcam serial by
+  default; optional `--throughput` measurement that stores no image data
+
+### Outstanding
+
+| Priority | Item |
+|---|---|
+| 🟠 | **F-C1** — `exposure_dynamic_framerate` costs 25% of 1080p framerate. Fix is a udev rule ([21 §6.2](21-camera-and-imaging.md)); **not applied**, because it trades away low-light brightness. Owner decision. |
+| 🟡 | **F-C4** — `collect-diagnostics.sh` does **not** redact the webcam serial (it is unprefixed and embedded in `/dev/v4l/by-id/` paths). Fold the pattern from `camera-diagnostics.sh` into it before the next diagnostics run is committed. |
+| 🟡 | **F-C3** — `dell-privacy` does not map this firmware's privacy keycodes (type `0x0012`, code `0x002d`); no desktop indicator. Upstream driver gap; protection itself is unaffected. |
+| 🔵 | Whether this unit has a physical SafeShutter or an electronic-only privacy cut is **undetermined** — indistinguishable from software, needs visual inspection. |
+| 🔵 | IR sensor is functional and unused; available for `howdy` face auth if wanted. |

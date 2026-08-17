@@ -46,6 +46,7 @@ corruption found. See [F-01](docs/07-findings-and-risks.md#f-01).
 | Set the BIOS correctly | [06 — BIOS/UEFI Configuration](docs/06-bios-uefi-configuration.md) |
 | Tune it after installing | [05 — Post-Install Optimization](docs/05-post-install-optimization.md) |
 | Understand cooling and power limits | [16 — Thermal & Power Architecture](docs/16-thermal-and-power-architecture.md) |
+| Fix webcam framerate, or use the IR sensor | [21 — Camera & Imaging Subsystem](docs/21-camera-and-imaging.md) |
 | Optimize cooling / measure gaming load | [17 — Cooling Optimization](docs/17-cooling-optimization.md) |
 | **Pick up the gaming/cooling work after a reboot** | **[19 — Gaming & Cooling Runbook](docs/19-gaming-cooling-runbook.md)** |
 
@@ -75,7 +76,8 @@ corruption found. See [F-01](docs/07-findings-and-risks.md#f-01).
 | [18 — Adversarial Review Log](docs/18-adversarial-review-log.md) | Two independent reviews of the cooling work: what survived verification, what did not, and the alternates not taken |
 | **[19 — Gaming & Cooling Runbook](docs/19-gaming-cooling-runbook.md)** | **Ordered task list from the next reboot onward: 13 steps, commands, verification, and which script runs each** |
 | [20 — Fan & Cooling Hardware](docs/20-fan-and-cooling-hardware.md) | Fan spec and measured capability, health assessment method and verdict, replaceability, airflow diagram, and every logical/physical cooling option with evidence |
-| [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair, backlight handoff, gaming baseline harness, gaming handoff report, aggressive cooling control, thermal decay test |
+| [21 — Camera & Imaging Subsystem](docs/21-camera-and-imaging.md) | Dual-sensor (RGB + IR) topology, V4L2 node mapping and the stable-selector trap, format matrix, measured throughput and the 25% framerate defect, logind ACL access model, Dell privacy driver keycode gap |
+| [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair, backlight handoff, gaming baseline harness, gaming handoff report, aggressive cooling control, thermal decay test, camera diagnostics |
 
 ---
 
