@@ -103,6 +103,8 @@ This directly informs the swap sizing decision — see
 | Controller | KIOXIA BG4 (`1e0f:0001`) — **DRAM-less** |
 | Capacity | 512,110,190,592 bytes (476.9 GiB) |
 | Interface | PCIe, NVMe 1.3 |
+| Endpoint link | PCIe **3.0** x4 (`LnkCap 8GT/s`) — the drive's own ceiling |
+| **Slot link** | **PCIe 4.0 x4** (`LnkCap 16GT/s`, root port `00:06.0`, CPU-attached) |
 | Firmware | 10410106 |
 | Serial | `[REDACTED]` |
 | Formatted LBA | **512 bytes** (format 0, `Rel_Perf 3`) |
@@ -120,6 +122,18 @@ consequences:
   optional on this drive** — it is the difference between fast and sluggish.
 - This is a strong argument for generous free space in the partitioning plan and for
   enabling periodic TRIM.
+
+> **The slot is faster than the drive.** The link negotiates 8GT/s only because the
+> BG4 is a Gen3 part — the root port advertises **16GT/s (PCIe 4.0) x4**. A Gen4
+> replacement would run at Gen4. Read the *root port's* `LnkCap`, not the endpoint's,
+> when judging a slot:
+> ```bash
+> sudo lspci -vv -s 00:06.0 | grep -E "LnkCap:|LnkSta:"
+> ```
+> Replacing this drive is the highest-value hardware change available on a machine
+> whose RAM is soldered and whose battery is at 23.6% health. Procedure, drive
+> selection criteria and the form-factor caveat:
+> **[22 — Drive Migration & M.2 Options](22-drive-migration.md)**.
 
 ### Health (SMART, NVMe log 0x02)
 

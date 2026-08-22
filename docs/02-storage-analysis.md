@@ -281,6 +281,15 @@ sudo nvme format /dev/nvme0n1 --lbaf=1 --force
 Recorded here as a documented opportunity, **not** a recommendation for the current
 dual-boot path.
 
+> **Since superseded by the rebuild, and now actionable again.** The dual-boot
+> constraint is gone — this machine is Linux-only ([10 — Change Log](10-change-log.md)).
+> The remaining obstacle is that reformatting still erases the drive, so the natural
+> moment is a **migration to a new SSD**, where the target is blank anyway. Note the
+> tradeoff: a block-level clone reproduces the 512 B format along with everything
+> else, so taking the 4 KiB opportunity means rebuilding file-level rather than
+> cloning. Both paths, with the steps each one costs:
+> **[22 — Drive Migration & M.2 Options](22-drive-migration.md#7-choosing-the-replacement-m2)**.
+
 ---
 
 ## 10. Summary
