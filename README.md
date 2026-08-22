@@ -48,6 +48,7 @@ corruption found. See [F-01](docs/07-findings-and-risks.md#f-01).
 | **Replace or upgrade the SSD** | **[22 — Drive Migration & M.2 Options](docs/22-drive-migration.md)** |
 | Tune it after installing | [05 — Post-Install Optimization](docs/05-post-install-optimization.md) |
 | Understand cooling and power limits | [16 — Thermal & Power Architecture](docs/16-thermal-and-power-architecture.md) |
+| Fix webcam framerate, or use the IR sensor | [23 — Camera & Imaging Subsystem](docs/23-camera-and-imaging.md) |
 | Optimize cooling / measure gaming load | [17 — Cooling Optimization](docs/17-cooling-optimization.md) |
 | **Pick up the gaming/cooling work after a reboot** | **[19 — Gaming & Cooling Runbook](docs/19-gaming-cooling-runbook.md)** |
 
@@ -79,7 +80,8 @@ corruption found. See [F-01](docs/07-findings-and-risks.md#f-01).
 | [20 — Fan & Cooling Hardware](docs/20-fan-and-cooling-hardware.md) | Fan spec and measured capability, health assessment method and verdict, replaceability, airflow diagram, and every logical/physical cooling option with evidence |
 | [21 — Lid Power-On & Sleep](docs/21-lid-power-and-sleep.md) | Why the lid powers the machine on from S5, the four layers that were suppressing suspend, the s2idle-only platform, and the polkit rule blocking hibernate |
 | [22 — Drive Migration & M.2 Options](docs/22-drive-migration.md) | Cloning this LUKS+LVM install to a new M.2, ten copy methods compared, what the slot physically accepts, and every other way to add storage to this chassis |
-| [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair, backlight handoff, gaming baseline harness, gaming handoff report, aggressive cooling control, thermal decay test |
+| [23 — Camera & Imaging Subsystem](docs/23-camera-and-imaging.md) | Dual-sensor (RGB + IR) topology, V4L2 node mapping and the stable-selector trap, format matrix, measured throughput and the 25% framerate defect, logind ACL access model, Dell privacy driver keycode gap |
+| [scripts/](scripts/) | Diagnostics collector, guarded build script, post-install repair, backlight handoff, gaming baseline harness, gaming handoff report, aggressive cooling control, thermal decay test, camera diagnostics |
 
 ---
 
