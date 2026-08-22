@@ -71,7 +71,7 @@ suspend under Linux — so it is the wrong lever for this.
 
 ---
 
-## 3. OS layer — why the machine had never slept
+## 3. OS layer — why the machine could not sleep
 
 Four independent settings each suppressed suspend. Any one of them alone would
 have been enough.
@@ -106,7 +106,7 @@ recorded.
 > recommended *"Enable Block Sleep → Disabled — would prevent suspend"*, while the
 > OS was suppressing suspend more completely than Block Sleep ever would have.
 
-### Evidence it had never suspended
+### Evidence: no suspend-to-RAM has ever completed
 
 ```bash
 journalctl --no-pager | grep -icE "PM: suspend entry|Entering sleep state"   # → 0
@@ -122,6 +122,43 @@ Aug 22 13:52:47  systemd-logind: Lid opened.
 
 No `PM: suspend entry`, no resume, no `Restarting tasks` between them. The panel
 blanked and unblanked; the system never left S0.
+
+### One hibernation *was* attempted — 2026-08-16 06:35, and it did not complete
+
+The "never suspended" statement is about **suspend-to-RAM**. The journal holds
+exactly one sleep event of any kind, and it is a hibernation:
+
+```
+06:35:18  systemd-logind: Lid closed.
+06:35:18  systemd-logind: Lid opened.
+06:35:18  kernel: PM: hibernation: Basic memory bitmaps created
+06:35:18  kernel: PM: hibernation: Allocated 4295616 kbytes in 27.41 seconds (156.71 MB/s)
+06:35:18  kernel: ACPI: PM: Preparing to enter system sleep state S4
+06:35:18  kernel: Disabling non-boot CPUs ...
+06:35:18  kernel: ACPI: PM: Waking up from system sleep state S4     ← snapshot returns
+06:35:18  kernel: PM: hibernation: Basic memory bitmaps freed
+06:35:18  kernel: Restarting tasks: Starting
+```
+
+It froze userspace, preallocated a **4.3 GB** image, entered ACPI **S4** for the
+snapshot, came back out, freed the bitmaps and restarted tasks. There is **no
+`Wrote image`, no image-saving progress, and no power-off** — the machine simply
+carried on logging. The snapshot phase ran; the write phase never did.
+
+Two things follow, and they pull in opposite directions:
+
+- ✅ **S4 entry and exit demonstrably work on this hardware.** The ACPI path, the
+  EC stop/start, the CPU offline/online cycle and device resume all completed. That
+  is more than §6 could prove from configuration alone.
+- ⚠️ **A hibernation was started and did not finish.** The trigger is not recorded.
+  `critical-battery-action` is `nothing`, so it was not a low-battery action; a
+  manual `systemctl hibernate` is the most plausible cause, but that is inference,
+  not evidence.
+
+**Seventeen hours later, at 23:29:55, all four sleep targets were masked.** The
+repo cannot prove the two events are connected, but "tested hibernate, it behaved
+strangely, disabled sleep entirely" fits the timeline exactly and is the most
+economical explanation for an otherwise unmotivated `systemctl mask`.
 
 ---
 
@@ -272,7 +309,84 @@ EOF
 
 ---
 
-## 7. The `/proc/acpi/wakeup` red herring
+## 7. Lid closed while docked (KVM) — does it stay on?
+
+**Yes, during a desktop session — and it is belt-and-braces, not luck.** Three
+independent layers each prevent a lid-close suspend:
+
+| Layer | State | Verified by |
+|---|---|---|
+| Cinnamon `lid-close-{ac,battery}-action` | **`blank`** — blank the panel, nothing more | `gsettings get` |
+| `csd-power` **block** inhibitor on `handle-lid-switch` | Held for the whole session | `systemd-inhibit --list` |
+| logind `HandleLidSwitchDocked` | **`ignore`** — applies whenever an external display is attached | `busctl … HandleLidSwitchDocked` |
+
+The second layer is the load-bearing one, and `logind.conf(5)` on this system is
+explicit about why:
+
+> Low level inhibitor locks (`"handle-power-key"`, `"handle-suspend-key"`,
+> `"handle-hibernate-key"`, `"handle-lid-switch"`) **are always honored**,
+> irrespective of this setting.
+
+So `LidSwitchIgnoreInhibited=yes` (the default) does **not** override
+`csd-power`'s lock — that setting governs only the high-level `sleep`/`idle`
+locks. While a Cinnamon session is running, `logind` does not act on the lid at
+all; Cinnamon does, and Cinnamon blanks.
+
+### Empirical confirmation
+
+| Date | Lid closed | Lid opened | Elapsed | Outcome |
+|---|---|---|---|---|
+| 2026-08-18 | 12:38:47 | 17:40:25 | **5 h 02 m** | Same boot throughout — stayed up |
+| 2026-08-19 | 20:13:33 | 23:26:48 | **3 h 13 m** | Same boot throughout — stayed up |
+
+Both fall inside one continuous boot (2026-08-17 18:52 → 2026-08-20 20:50) with no
+suspend, no resume and no reboot. Note the caveat: both predate the unmasking, so
+they prove the *policy* held, not that the policy is all that was holding it.
+`logind` never even tried — had it tried and hit the masked target, the journal
+would carry a `Unit sleep.target is masked` failure. It carries none.
+
+### ⚠️ The gap: no session, no inhibitor
+
+`csd-power`'s lock exists **only while a Cinnamon session is running**. It is
+absent at the LUKS passphrase prompt, on the LightDM greeter, on a bare TTY, and
+for the seconds between logout and the next login. In those windows nothing
+inhibits `logind`, and `HandleLidSwitch=suspend` applies.
+
+**Before 2026-08-22 this was harmless** — suspend was masked, so the attempt would
+have failed. Unmasking made that path live. Closing the lid at the greeter will now
+suspend the machine, where previously it would not have.
+
+For a machine that lives docked behind a KVM with the lid shut, make it
+unconditional rather than session-dependent:
+
+```bash
+sudo tee /etc/systemd/logind.conf.d/10-lid.conf >/dev/null <<'EOF'
+[Login]
+HandleLidSwitch=ignore
+HandleLidSwitchDocked=ignore
+HandleLidSwitchExternalPower=ignore
+EOF
+sudo systemctl restart systemd-logind      # ⚠️ can end the graphical session
+```
+
+That removes the dependency on a running desktop entirely: the lid becomes inert
+at every stage of boot and session lifecycle. Suspend remains available on demand
+(`systemctl suspend`, the menu, idle timeouts) — only the *lid* stops being a
+trigger.
+
+### KVM-specific note
+
+When the KVM switches away from this laptop, the external display disconnects and
+`logind`'s `Docked` property drops to `false` — confirmed here, where only
+`card1-eDP-1` reads `connected` while the KVM is on another input. That makes
+`HandleLidSwitchDocked` inapplicable and falls through to `HandleLidSwitch`. It
+changes nothing while a session is running (layer 2 still holds), but it is
+precisely why the drop-in above is worth having: the docked-state layer is the one
+a KVM makes unreliable.
+
+---
+
+## 8. The `/proc/acpi/wakeup` red herring
 
 ```
 LID0	  S3	*enabled   platform:PNP0C0D:00
@@ -291,7 +405,7 @@ runs below ACPI.
 
 ---
 
-## 8. Turning the lid power-on off
+## 9. Turning the lid power-on off
 
 The BIOS setup screen is the reliable route:
 
@@ -318,7 +432,7 @@ inside an enclosed space. On this chassis, with a battery at 23.6 % health
 
 ---
 
-## 9. Quick reference
+## 10. Quick reference
 
 ```bash
 # Is lid power-on enabled? (needs sudo — unprivileged read returns empty)
@@ -341,7 +455,7 @@ journalctl -b | grep -E "PM: suspend entry|Lid (opened|closed)"
 
 ---
 
-## 10. Open items
+## 11. Open items
 
 | Priority | Item |
 |---|---|
@@ -349,3 +463,4 @@ journalctl -b | grep -E "PM: suspend entry|Lid (opened|closed)"
 | 🟡 | Lid close still only blanks. Decide whether it should suspend, and whether `csd-power`'s external-display inhibitor is wanted behaviour. |
 | 🟡 | Hibernate remains polkit-blocked by distro default. Rule drafted in §6, **not applied**, untested against the LUKS swap LV. |
 | 🟡 | Confirm nothing else was changed manually in the same undocumented 2026-08-16 23:29 session. |
+| 🟡 | **Lid is inert only while a desktop session runs** (§7). Decide whether to install the `logind` drop-in that makes it unconditional — recommended for docked/KVM use. |

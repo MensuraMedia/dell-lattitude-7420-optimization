@@ -444,7 +444,8 @@ lid opens?* It is. Full analysis in
 | **`PowerOnLidOpen=Enabled`** (Dell factory default) — the EC cold-boots the machine from S5 on lid open | `dell-wmi-sysman` attribute read as root |
 | **`sleep.target`, `suspend.target`, `hibernate.target`, `hybrid-sleep.target` all masked** → `/dev/null` | Symlinks, all stamped **2026-08-16 23:29:55** |
 | The masking appears in **no script and no doc in this repo** — a manual action taken outside the tooling | `grep -rn 'systemctl mask' scripts/ docs/` → only `power-profiles-daemon` |
-| **This install had never suspended, not once** | `journalctl \| grep -c "PM: suspend entry"` → **0** across all retained boots |
+| **No suspend-to-RAM has ever completed on this install** | `journalctl \| grep -c "PM: suspend entry"` → **0** across all retained boots |
+| **One hibernation was attempted 2026-08-16 06:35 and did not complete** — froze userspace, preallocated a 4.3 GB image, entered ACPI **S4**, came back out, no image written, no power-off. 17 h later all four sleep targets were masked | Kernel log: `Preparing to enter system sleep state S4` → `Waking up from system sleep state S4` → `Restarting tasks` |
 | Three further suppressors below the masking: Cinnamon `lid-close-*-action=blank`, `sleep-inactive-*-type=nothing`, and a `csd-power` **block** inhibitor on `handle-lid-switch` ("Multiple displays attached") | `gsettings`, `systemd-inhibit --list` |
 | Platform is **s2idle-only — no S3** | `/sys/power/mem_sleep` = `[s2idle]`; `ACPI: PM: (supports S0 S4 S5)` |
 | **Hibernate is blocked by an Ubuntu polkit rule**, not by hardware — every kernel/swap prerequisite passes | logind debug trace ends at `PolicyKit1 … CheckAuthorization`; `com.ubuntu.desktop.rules:65` returns `polkit.Result.NO` |
@@ -481,7 +482,7 @@ exactly the state `PowerOnLidOpen` acts from.
 
 ### Added
 
-- `docs/21-lid-power-and-sleep.md`
+- `docs/21-lid-power-and-sleep.md` — includes §7, lid behaviour when docked behind a KVM
 - `docs/06` — lid rows in the Power Management table, firmware-vs-OS section,
   s2idle confirmation, pre-install checklist item
 
@@ -493,3 +494,4 @@ exactly the state `PowerOnLidOpen` acts from.
 | 🟡 | Decide whether lid close should suspend, and whether the external-display inhibitor is wanted. |
 | 🟡 | Hibernate: apply the polkit rule and test, or record the decision not to. |
 | 🟡 | Audit whether anything else was changed manually in the undocumented 2026-08-16 23:29 session. |
+| 🟡 | **Lid close is inert only while a Cinnamon session runs** — `csd-power`'s inhibitor does not exist at the greeter or on a TTY, where `HandleLidSwitch=suspend` now applies. Drop-in to make it unconditional is in [21 §7](21-lid-power-and-sleep.md); recommended for docked/KVM use, **not applied**. |
