@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+#
+# display-utility — Dell Latitude 7420 / Linux Mint 22.3 (Cinnamon, X11)
+#
+# The "only use display N" that Cinnamon's Display panel does not offer.
+# Cinnamon ships Join and Mirror but no GNOME-style "Single Display" mode; the
+# equivalent is buried in a per-monitor toggle that is unavailable while that
+# monitor is primary. This wraps xrandr so it is one command.
+#
+# Usage:
+#   display-utility                     # same as 'list'
+#   display-utility list                # numbered connected outputs
+#   display-utility only 2              # show on display 2 ONLY (by number or name)
+#   display-utility only HDMI-1         #   same, by output name
+#   display-utility join [2 1]          # extend across all, left-to-right in that order
+#   display-utility mirror              # mirror all connected outputs
+#   display-utility save                # remember the current layout
+#   display-utility restore             # re-apply the remembered layout
+#   display-utility autostart on|off    # re-apply it automatically at login
+#   display-utility status              # what is active right now
+#
+# Options:
+#   -y, --yes       skip the keep-or-revert confirmation
+#   -q, --quiet     suppress normal output (for autostart)
+#
+# SAFETY: any layout change is applied, then held for 15 seconds awaiting
+# confirmation. No answer means it reverts — the same guard the GUI gives you,
+# because a bad mode on a display you cannot see is otherwise unrecoverable
+# without a TTY. -y skips it.
+set -u
+
+export DISPLAY="${DISPLAY:-:0}"
+STATE="$HOME/.local/state/display-utility/layout"
+AUTOSTART="$HOME/.config/autostart/display-utility-restore.desktop"
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+TIMEOUT=15
+YES=0; QUIET=0
+
+R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; C=$'\033[36m'; B=$'\033[1m'; N=$'\033[0m'
+say()  { (( QUIET )) || printf '%s\n' "$*"; }
+err()  { printf '%serror:%s %s\n' "$R" "$N" "$*" >&2; }
+die()  { err "$*"; exit 1; }
+
+command -v xrandr >/dev/null || die "xrandr not found (this tool is X11-only)"
+xrandr --query >/dev/null 2>&1 || die "cannot talk to the X server on DISPLAY=$DISPLAY"
+
+args=()
+for a in "$@"; do
+  case "$a" in
+    -y|--yes)   YES=1 ;;
+    -q|--quiet) QUIET=1 ;;
+    -h|--help)  sed -n '3,32p' "$SELF" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *)          args+=("$a") ;;
+  esac
+done
+set -- "${args[@]+"${args[@]}"}"
+
+# ── output enumeration ────────────────────────────────────────────────────────
+# connected outputs, in xrandr's own order — that ordering is what the numbers mean
+mapfile -t OUTPUTS < <(xrandr --query | awk '/ connected/{print $1}')
+(( ${#OUTPUTS[@]} )) || die "no connected outputs"
+
+is_active()  { xrandr --query | grep -qE "^$1 connected.*[0-9]+x[0-9]+\+[0-9]+\+[0-9]+"; }
+is_primary() { xrandr --query | grep -qE "^$1 connected primary"; }
+cur_mode()   { xrandr --query | grep -E "^$1 connected" | grep -oE '[0-9]+x[0-9]+\+[0-9]+\+[0-9]+' | head -1; }
+pretty()     { xrandr --query | grep -E "^$1 connected" | grep -oE '[0-9]+mm x [0-9]+mm' | head -1; }
+
+# resolve "2" or "HDMI-1" to an output name
+resolve() {
+  local t="$1"
+  if [[ "$t" =~ ^[0-9]+$ ]]; then
+    (( t >= 1 && t <= ${#OUTPUTS[@]} )) || die "no display $t (see: display-utility list)"
+    printf '%s' "${OUTPUTS[$((t-1))]}"
+  else
+    local o; for o in "${OUTPUTS[@]}"; do [[ "$o" == "$t" ]] && { printf '%s' "$o"; return; }; done
+    die "'$t' is not a connected output (see: display-utility list)"
+  fi
+}
+
+# ── capture / apply a layout as xrandr arguments ──────────────────────────────
+capture() {
+  local o out=()
+  for o in "${OUTPUTS[@]}"; do
+    if is_active "$o"; then
+      # cur_mode gives WxH+X+Y; xrandr wants --mode WxH and --pos XxY
+      local geo mode x y
+      geo=$(cur_mode "$o"); mode=${geo%%+*}
+      x=$(cut -d+ -f2 <<<"$geo"); y=$(cut -d+ -f3 <<<"$geo")
+      out+=( --output "$o" --mode "$mode" --pos "${x}x${y}" )
+      is_primary "$o" && out+=( --primary )
+    else
+      out+=( --output "$o" --off )
+    fi
+  done
+  printf '%s\n' "${out[@]}"
+}
+
+apply() {                      # apply "$@" as xrandr args, with revert guard
+  local prev; mapfile -t prev < <(capture)
+  if ! xrandr "$@" 2>&1; then
+    err "xrandr rejected that layout; nothing changed"; return 1
+  fi
+  (( YES )) && { say "${G}applied.${N}"; return 0; }
+  if [[ ! -t 0 ]]; then say "${G}applied${N} (non-interactive: no revert guard)"; return 0; fi
+  printf '\n  %sKeep this layout?%s [y/N] — reverting in %ss if there is no answer: ' "$B" "$N" "$TIMEOUT"
+  local a=""; read -r -t "$TIMEOUT" a || true; echo
+  if [[ "${a,,}" == y ]]; then say "${G}kept.${N}"; return 0; fi
+  xrandr "${prev[@]}" 2>/dev/null && say "${Y}reverted.${N}"
+  return 1
+}
+
+# ── commands ──────────────────────────────────────────────────────────────────
+cmd_list() {
+  say "${B}connected displays${N}"
+  local i=1 o
+  for o in "${OUTPUTS[@]}"; do
+    local mark="  " state geo
+    is_primary "$o" && mark="${G}*${N} "
+    if is_active "$o"; then geo=$(cur_mode "$o"); state="${G}on${N}  $geo"
+    else                    geo="";              state="${Y}off${N}"; fi
+    printf '  %s[%d] %-10s %-24s %s\n' "$mark" "$i" "$o" "$state" "$(pretty "$o")"
+    i=$((i+1))
+  done
+  say ""
+  say "  ${C}* = primary.  Use the number or the name:  display-utility only 2${N}"
+}
+
+cmd_only() {
+  [[ $# -ge 1 ]] || die "usage: display-utility only <number|name>"
+  local target; target=$(resolve "$1")
+  local a=( --output "$target" --auto --primary --pos 0x0 ) o
+  for o in "${OUTPUTS[@]}"; do [[ "$o" == "$target" ]] || a+=( --output "$o" --off ); done
+  say "showing on ${B}$target${N} only"
+  apply "${a[@]}" && cmd_save_quiet
+}
+
+cmd_join() {
+  local order=() o
+  if (( $# )); then for o in "$@"; do order+=( "$(resolve "$o")" ); done
+  else order=( "${OUTPUTS[@]}" ); fi
+  local a=( --output "${order[0]}" --auto --primary --pos 0x0 ) prev="${order[0]}" i
+  for (( i=1; i<${#order[@]}; i++ )); do
+    a+=( --output "${order[i]}" --auto --right-of "$prev" ); prev="${order[i]}"
+  done
+  # anything not named gets switched off
+  for o in "${OUTPUTS[@]}"; do
+    local found=0 x; for x in "${order[@]}"; do [[ "$x" == "$o" ]] && found=1; done
+    (( found )) || a+=( --output "$o" --off )
+  done
+  say "joining: ${B}${order[*]}${N} (left to right)"
+  apply "${a[@]}" && cmd_save_quiet
+}
+
+cmd_mirror() {
+  local base="${OUTPUTS[0]}" a=( --output "$base" --auto --primary --pos 0x0 ) o
+  for o in "${OUTPUTS[@]}"; do [[ "$o" == "$base" ]] || a+=( --output "$o" --auto --same-as "$base" ); done
+  say "mirroring all outputs onto ${B}$base${N}"
+  say "${Y}note:${N} mirroring forces a common resolution — the larger panel may letterbox"
+  apply "${a[@]}" && cmd_save_quiet
+}
+
+cmd_save_quiet() { mkdir -p "$(dirname "$STATE")"; capture > "$STATE"; }
+cmd_save() { cmd_save_quiet; say "${G}saved${N} current layout -> $STATE"; }
+
+cmd_restore() {
+  [[ -f "$STATE" ]] || die "nothing saved yet (run: display-utility save)"
+  mapfile -t a < "$STATE"
+  # If a saved output is no longer connected, xrandr rejects the whole call rather
+  # than the one stanza — so say that plainly instead of leaving a bare error.
+  YES=1 apply "${a[@]}" || die "restore failed — a saved output is probably no longer connected (run: display-utility list)"
+  say "${G}restored.${N}"
+}
+
+cmd_autostart() {
+  case "${1:-}" in
+    on)
+      mkdir -p "$(dirname "$AUTOSTART")"
+      cat > "$AUTOSTART" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=display-utility restore
+Comment=Re-apply the saved monitor layout at login
+Exec=bash -c 'sleep 4; "$SELF" restore --quiet --yes'
+X-GNOME-Autostart-enabled=true
+NoDisplay=true
+DESKTOP
+      say "${G}autostart enabled${N} -> $AUTOSTART"
+      say "  ${C}re-applies the saved layout 4s after login (the delay lets csd-xrandr settle first)${N}"
+      ;;
+    off) rm -f "$AUTOSTART"; say "${Y}autostart disabled${N}" ;;
+    *)   if [[ -f "$AUTOSTART" ]]; then say "autostart: ${G}on${N}"; else say "autostart: ${Y}off${N}"; fi
+         say "  usage: display-utility autostart on|off" ;;
+  esac
+}
+
+cmd_status() {
+  say "${B}$(xrandr --query | head -1)${N}"
+  cmd_list
+  say ""
+  [[ -f "$STATE" ]] && say "saved layout: ${G}present${N} ($STATE)" || say "saved layout: ${Y}none${N}"
+  cmd_autostart
+}
+
+case "${1:-list}" in
+  list|ls)    cmd_list ;;
+  only|single) shift; cmd_only "$@" ;;
+  join|extend) shift; cmd_join "$@" ;;
+  mirror|clone) cmd_mirror ;;
+  save)       cmd_save ;;
+  restore)    cmd_restore ;;
+  autostart)  shift; cmd_autostart "$@" ;;
+  status)     cmd_status ;;
+  *)          die "unknown command '$1' (try: display-utility --help)" ;;
+esac
