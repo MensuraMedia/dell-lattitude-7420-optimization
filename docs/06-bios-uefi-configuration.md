@@ -113,6 +113,10 @@ you intend to run VMs with device passthrough.
 | **Primary Battery Charge Configuration** | **Adaptive**, or Custom 75%/80% | See discussion |
 | Enable Block Sleep | Disabled | Would prevent suspend |
 | Enable USB Wake Support | Enabled | Wake from external keyboard |
+| **Power On Lid Open** | **Your call — see below** | ⚠️ **Enabled.** Cold-boots the machine from S5 whenever the lid opens |
+| **Enable Lid Switch** | **Enabled** | Master enable for the lid sensor; disabling also kills lid-close suspend |
+| Wake on Dell USB-C Dock | Enabled | Dock attach wakes the system |
+| Wake on AC | Disabled | ✅ already |
 | Enable Intel Speed Shift Technology | **Enabled** | Required for HWP / `intel_pstate` active mode |
 | Enable Thermal Management | **Optimized** | Balanced fan curve |
 | **Block Sleep (S0ix / Modern Standby)** | see below | — |
@@ -138,6 +142,23 @@ If you set thresholds in the BIOS, remove `START_CHARGE_THRESH_BAT0` /
 > Applies to the **replacement** battery. The current cell at 23.6% health has
 > nothing left to protect.
 
+#### Lid behaviour — firmware vs OS
+
+**Power On Lid Open** (`PowerOnLidOpen`) is enabled on this machine, which is Dell's
+factory default. It is an **embedded-controller** function: with the system fully
+off (S5), opening the lid asserts power exactly as a power-button press would. It
+is independent of the operating system and of every `logind` and desktop setting.
+
+This is not the same thing as the lid **waking** a sleeping machine — that is
+`/proc/acpi/wakeup`'s `LID0` entry, which only applies once the system is actually
+asleep. Two mechanisms, two states, frequently confused.
+
+> ⚠️ Between 2026-08-16 and 2026-08-22 this machine **could not suspend at all** —
+> `sleep.target` and friends were masked outside the tooling — so S5 was the only
+> low-power state it ever reached, and every lid open was a cold boot. Corrected
+> 2026-08-22. Full analysis, evidence and the polkit hibernate block:
+> **[21 — Lid Power-On & Sleep](21-lid-power-and-sleep.md)**.
+
 #### Modern Standby (S0ix) vs S3
 
 The 7420 defaults to **S0ix / Modern Standby**. Linux support on Tiger Lake is good
@@ -149,6 +170,12 @@ cat /sys/power/mem_sleep
 ```
 - `[s2idle]` only → Modern Standby, no S3 available in this BIOS
 - `s2idle [deep]` → S3 available and selected
+
+**Confirmed on this machine 2026-08-22: `[s2idle]` only.** `dmesg` agrees —
+`ACPI: PM: (supports S0 S4 S5)`, with no S3 declared. BIOS 1.50.1 exposes no option
+to change this, so `mem_sleep_default=deep` would be inert here. Suspend-to-RAM on
+this laptop means s2idle, and idle drain depends on runtime PM rather than a
+hardware sleep state.
 
 If suspend drains the battery excessively, look for **"Enable S3 sleep"** or a
 sleep-state option under Power Management. Not all 7420 BIOS revisions expose it. If
@@ -283,5 +310,6 @@ sudo fwupdmgr update
 - [ ] VT-x and VT-d = **Enabled**
 - [ ] Intel Speed Shift = **Enabled**
 - [ ] Secure Boot = **Disabled** during installation (optionally enable afterwards)
+- [ ] **Power On Lid Open** — decide deliberately; **Enabled** by default ([21](21-lid-power-and-sleep.md))
 - [ ] Admin/Setup password set
 - [ ] AC power connected
