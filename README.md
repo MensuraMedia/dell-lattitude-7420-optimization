@@ -46,9 +46,11 @@ corruption found. See [F-01](docs/07-findings-and-risks.md#f-01).
 | Set the BIOS correctly | [06 — BIOS/UEFI Configuration](docs/06-bios-uefi-configuration.md) |
 | **Understand why it powers on when you open the lid** | **[21 — Lid Power-On & Sleep](docs/21-lid-power-and-sleep.md)** |
 | **Replace or upgrade the SSD** | **[22 — Drive Migration & M.2 Options](docs/22-drive-migration.md)** |
+| **Show only one monitor / fix the layout resetting** | **[24 — display-utility](docs/24-display-utility.md)** |
 | Tune it after installing | [05 — Post-Install Optimization](docs/05-post-install-optimization.md) |
 | Understand cooling and power limits | [16 — Thermal & Power Architecture](docs/16-thermal-and-power-architecture.md) |
 | Fix webcam framerate, or use the IR sensor | [23 — Camera & Imaging Subsystem](docs/23-camera-and-imaging.md) |
+| [24 — display-utility](docs/24-display-utility.md) | The "use this monitor only" mode Cinnamon omits: commands, the revert guard, and why a layout set through the GUI still did not survive a reboot |
 | Optimize cooling / measure gaming load | [17 — Cooling Optimization](docs/17-cooling-optimization.md) |
 | **Pick up the gaming/cooling work after a reboot** | **[19 — Gaming & Cooling Runbook](docs/19-gaming-cooling-runbook.md)** |
 

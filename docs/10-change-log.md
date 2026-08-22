@@ -560,3 +560,35 @@ rather than USB, which makes it better than the usual laptop card reader.
 - `docs/01` — endpoint vs slot link rows, Gen4 note, upgrade pointer
 - `docs/02` — §9's 4 KiB LBA opportunity re-opened now that dual-boot is gone, with
   the clone-vs-rebuild tradeoff it implies
+
+### Follow-up — display-utility (same day)
+
+The docked layout (HDMI-only, laptop panel off) **did not survive the 15:43
+reboot**, despite `csd-xrandr` having written `~/.config/cinnamon-monitors.xml`.
+The machine came back with the internal panel primary and the desktop extended.
+
+| Finding | Consequence |
+|---|---|
+| Cinnamon ships **Join** and **Mirror** but no GNOME-style *Single Display* mode; the equivalent per-monitor toggle is **unavailable while that monitor is primary** | "Show only the external" is a two-step dance in a fixed order, and looks like a missing feature |
+| `cinnamon-monitors.xml` is written **whether or not it is honoured** | It is not evidence of persistence. `lid-dock-handoff.sh` had been testing exactly that and reporting green while the mechanism was broken |
+
+### Added
+
+- `scripts/display-utility` — `only N` / `join` / `mirror` / `save` / `restore` /
+  `autostart` / `menu`, with a 15 s revert guard (terminal `read`, or zenity when
+  launched from the menu) and an applications-menu entry
+- `docs/24-display-utility.md`
+- Installed: symlink at `~/.local/bin/display-utility`, menu entry, login autostart
+
+### Verified after the 16:08 reboot
+
+| Item | State |
+|---|---|
+| `HandleLidSwitch` | **`ignore`** — the drop-in is now in effect; the lid is unconditionally inert |
+| Display layout | **`HDMI-1` primary 2560×1080, `eDP-1` off** — persisted |
+| Power | AC online, battery 72% charging |
+| `CanSuspend` | `yes` |
+
+The 2026-08-22 lid drop-in was written **after** logind had already started, so it
+sat inert until this reboot — the reason `lid-dock-handoff.sh` now reports the
+effective value rather than the file's existence.
