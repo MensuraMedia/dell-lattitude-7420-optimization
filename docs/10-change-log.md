@@ -428,3 +428,70 @@ Full detail in [18 — Adversarial Review Log](18-adversarial-review-log.md).
 | 🟠 | `platform_profile` final selection — pending controlled A/B at steady state |
 | 🟡 | `perf_event_paranoid=4` blocks `intel_gpu_top` for non-root; MangoHud GPU fields stay blank until lowered to 2 (security tradeoff) |
 | 🟡 | Confirm whether `platform-profile-cool.service` is needed at all |
+
+---
+
+## 2026-08-22 — Lid power-on investigation; sleep unmasked
+
+Triggered by a single question: *is the laptop automatically turning on when the
+lid opens?* It is. Full analysis in
+**[21 — Lid Power-On & Sleep](21-lid-power-and-sleep.md)**.
+
+### Found
+
+| Finding | Evidence |
+|---|---|
+| **`PowerOnLidOpen=Enabled`** (Dell factory default) — the EC cold-boots the machine from S5 on lid open | `dell-wmi-sysman` attribute read as root |
+| **`sleep.target`, `suspend.target`, `hibernate.target`, `hybrid-sleep.target` all masked** → `/dev/null` | Symlinks, all stamped **2026-08-16 23:29:55** |
+| The masking appears in **no script and no doc in this repo** — a manual action taken outside the tooling | `grep -rn 'systemctl mask' scripts/ docs/` → only `power-profiles-daemon` |
+| **No suspend-to-RAM has ever completed on this install** | `journalctl \| grep -c "PM: suspend entry"` → **0** across all retained boots |
+| **One hibernation was attempted 2026-08-16 06:35 and did not complete** — froze userspace, preallocated a 4.3 GB image, entered ACPI **S4**, came back out, no image written, no power-off. 17 h later all four sleep targets were masked | Kernel log: `Preparing to enter system sleep state S4` → `Waking up from system sleep state S4` → `Restarting tasks` |
+| Three further suppressors below the masking: Cinnamon `lid-close-*-action=blank`, `sleep-inactive-*-type=nothing`, and a `csd-power` **block** inhibitor on `handle-lid-switch` ("Multiple displays attached") | `gsettings`, `systemd-inhibit --list` |
+| Platform is **s2idle-only — no S3** | `/sys/power/mem_sleep` = `[s2idle]`; `ACPI: PM: (supports S0 S4 S5)` |
+| **Hibernate is blocked by an Ubuntu polkit rule**, not by hardware — every kernel/swap prerequisite passes | logind debug trace ends at `PolicyKit1 … CheckAuthorization`; `com.ubuntu.desktop.rules:65` returns `polkit.Result.NO` |
+
+Together the first two explain the reported behaviour completely: with suspend
+impossible, **S5 was the only low-power state the machine ever reached** — and S5 is
+exactly the state `PowerOnLidOpen` acts from.
+
+### Applied
+
+| Change | Command | Verified |
+|---|---|---|
+| Unmasked all four sleep targets | `systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target` | All four report `static`; no mask symlinks remain in `/etc` or `/run` |
+| — | `systemctl daemon-reload` | `CanSuspend` **`no` → `yes`** via `busctl` on `login1.Manager` |
+
+### Deliberately not applied
+
+- **`PowerOnLidOpen` left Enabled.** Firmware setting, user's call. `dell-wmi-sysman`
+  cannot write it anyway — `authentication/Admin/is_enabled=0`, and the driver
+  refuses attribute writes without a BIOS admin password. F2 → Power Management.
+- **Lid close still only blanks.** The Cinnamon actions and the `csd-power`
+  inhibitor were left as found; changing them is a behavioural preference, not a fix.
+- **Hibernate left blocked.** An override rule is drafted in
+  [21 §6](21-lid-power-and-sleep.md) but not installed and not tested against the
+  LUKS-backed swap LV.
+
+### Side effects checked
+
+- `swapoff /dev/zram0` was used briefly to rule out zram as the hibernate blocker,
+  then restored with `swapon -p 100 /dev/zram0`. Usage was 0 B throughout; priorities
+  are back to `dm-3 = -1`, `zram0 = 100`.
+- `systemd-logind` log level was raised to `debug` via the `LogControl1` D-Bus
+  interface for two queries and **returned to `info`**.
+
+### Added
+
+- `docs/21-lid-power-and-sleep.md` — includes §7, lid behaviour when docked behind a KVM
+- `docs/06` — lid rows in the Power Management table, firmware-vs-OS section,
+  s2idle confirmation, pre-install checklist item
+
+### Outstanding
+
+| Priority | Item |
+|---|---|
+| 🟠 | **Suspend permitted but never exercised.** `CanSuspend=yes` is not proof that s2idle resumes cleanly under LUKS with `i915.enable_dpcd_backlight=0`. Test deliberately; the backlight regression in [13](13-display-and-keyboard-backlight.md) is the most plausible interaction. |
+| 🟡 | Decide whether lid close should suspend, and whether the external-display inhibitor is wanted. |
+| 🟡 | Hibernate: apply the polkit rule and test, or record the decision not to. |
+| 🟡 | Audit whether anything else was changed manually in the undocumented 2026-08-16 23:29 session. |
+| 🟡 | **Lid close is inert only while a Cinnamon session runs** — `csd-power`'s inhibitor does not exist at the greeter or on a TTY, where `HandleLidSwitch=suspend` now applies. Drop-in to make it unconditional is in [21 §7](21-lid-power-and-sleep.md); recommended for docked/KVM use, **not applied**. |
