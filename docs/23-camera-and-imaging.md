@@ -1,4 +1,4 @@
-# 21 — Camera & Imaging Subsystem
+# 23 — Camera & Imaging Subsystem
 
 Full characterisation of the integrated webcam: dual-sensor topology, V4L2 node
 mapping, format matrix, control surface, measured throughput, access-control model,

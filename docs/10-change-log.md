@@ -434,7 +434,7 @@ Full detail in [18 — Adversarial Review Log](18-adversarial-review-log.md).
 ## 2026-08-16 — Camera subsystem characterisation
 
 **Scope:** read-only investigation of the integrated webcam. **No persistent system
-change was made.** Full detail in [21 — Camera & Imaging Subsystem](21-camera-and-imaging.md).
+change was made.** Full detail in [23 — Camera & Imaging Subsystem](23-camera-and-imaging.md).
 
 **Environment:** installed system (not live USB), kernel 7.0.0-28-generic, BIOS 1.50.1.
 
@@ -462,7 +462,7 @@ change was made.** Full detail in [21 — Camera & Imaging Subsystem](21-camera-
 
 ### Added
 
-- `docs/21-camera-and-imaging.md` — full subsystem characterisation, findings F-C1…F-C7
+- `docs/23-camera-and-imaging.md` — full subsystem characterisation, findings F-C1…F-C7
 - `scripts/camera-diagnostics.sh` — read-only collector; redacts the webcam serial by
   default; optional `--throughput` measurement that stores no image data
 
@@ -470,7 +470,7 @@ change was made.** Full detail in [21 — Camera & Imaging Subsystem](21-camera-
 
 | Priority | Item |
 |---|---|
-| 🟠 | **F-C1** — `exposure_dynamic_framerate` costs 25% of 1080p framerate. Fix is a udev rule ([21 §6.2](21-camera-and-imaging.md)); **not applied**, because it trades away low-light brightness. Owner decision. |
+| 🟠 | **F-C1** — `exposure_dynamic_framerate` costs 25% of 1080p framerate. Fix is a udev rule ([23 §6.2](23-camera-and-imaging.md)); **not applied**, because it trades away low-light brightness. Owner decision. |
 | 🟡 | **F-C4** — `collect-diagnostics.sh` does **not** redact the webcam serial (it is unprefixed and embedded in `/dev/v4l/by-id/` paths). Fold the pattern from `camera-diagnostics.sh` into it before the next diagnostics run is committed. |
 | 🟡 | **F-C3** — `dell-privacy` does not map this firmware's privacy keycodes (type `0x0012`, code `0x002d`); no desktop indicator. Upstream driver gap; protection itself is unaffected. |
 | 🔵 | Whether this unit has a physical SafeShutter or an electronic-only privacy cut is **undetermined** — indistinguishable from software, needs visual inspection. |

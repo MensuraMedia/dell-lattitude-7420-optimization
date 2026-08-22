@@ -4,7 +4,7 @@
 - **Kernel:** 7.0.0-28-generic
 - **Device:** `1bcf:2ba0` Integrated_Webcam_FHD
 - **Redaction:** ENABLED (safe to commit)
-- **Reference:** [docs/21-camera-and-imaging.md](../docs/21-camera-and-imaging.md)
+- **Reference:** [docs/23-camera-and-imaging.md](../docs/23-camera-and-imaging.md)
 
 ## USB device descriptor
 
@@ -298,7 +298,7 @@ trace            0
 
 ## Dell privacy driver events
 
-Unmapped keycodes here mean privacy events never reach userspace (docs/21 §8).
+Unmapped keycodes here mean privacy events never reach userspace (docs/23 §8).
 ```
 N: Name="Dell Privacy Driver"
 P: Phys=
@@ -328,7 +328,7 @@ no process holding either node
 ## Sustained throughput (frames discarded)
 
 Declared 1080p rate is 30 fps. A result near 22 fps indicates
-`exposure_dynamic_framerate=1` trading framerate for exposure (docs/21 §6.2).
+`exposure_dynamic_framerate=1` trading framerate for exposure (docs/23 §6.2).
 ```
 exposure_dynamic_framerate = 1
 fps= 20

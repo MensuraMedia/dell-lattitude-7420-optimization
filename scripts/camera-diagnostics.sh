@@ -17,7 +17,7 @@
 #   ./scripts/camera-diagnostics.sh --no-redact      # full, DO NOT COMMIT
 #   ./scripts/camera-diagnostics.sh -o /path/out.md
 #
-# Reference: docs/21-camera-and-imaging.md
+# Reference: docs/23-camera-and-imaging.md
 #
 set -uo pipefail
 
@@ -84,7 +84,7 @@ block() {
   echo "- **Kernel:** $(uname -r)"
   echo "- **Device:** \`${VID}:${PID}\` Integrated_Webcam_FHD"
   echo "- **Redaction:** $([[ $REDACT -eq 1 ]] && echo 'ENABLED (safe to commit)' || echo '*** DISABLED — DO NOT COMMIT ***')"
-  echo "- **Reference:** [docs/21-camera-and-imaging.md](../docs/21-camera-and-imaging.md)"
+  echo "- **Reference:** [docs/23-camera-and-imaging.md](../docs/23-camera-and-imaging.md)"
 } > "$OUTFILE"
 
 section "USB device descriptor"
@@ -128,7 +128,7 @@ echo "\`quirks=4294967295\` is the \`(unsigned)-1\` 'no override' sentinel — n
 block "for f in /sys/module/uvcvideo/parameters/*; do printf '%-16s %s\n' \"\$(basename \$f)\" \"\$(cat \$f 2>/dev/null)\"; done"
 
 section "Dell privacy driver events"
-echo "Unmapped keycodes here mean privacy events never reach userspace (docs/21 §8)." >> "$OUTFILE"
+echo "Unmapped keycodes here mean privacy events never reach userspace (docs/23 §8)." >> "$OUTFILE"
 block "grep -A8 -i 'Dell Privacy' /proc/bus/input/devices 2>/dev/null; echo '--- kernel messages ---'; dmesg 2>/dev/null | grep -iE 'privacy|uvcvideo' | tail -20"
 
 section "Exclusive-access check"
@@ -138,7 +138,7 @@ if [[ $THROUGHPUT -eq 1 ]]; then
   section "Sustained throughput (frames discarded)"
   if command -v ffmpeg >/dev/null 2>&1; then
     echo "Declared 1080p rate is 30 fps. A result near 22 fps indicates" >> "$OUTFILE"
-    echo "\`exposure_dynamic_framerate=1\` trading framerate for exposure (docs/21 §6.2)." >> "$OUTFILE"
+    echo "\`exposure_dynamic_framerate=1\` trading framerate for exposure (docs/23 §6.2)." >> "$OUTFILE"
     CUR="$(v4l2-ctl -d /dev/video0 -C exposure_dynamic_framerate 2>/dev/null | awk '{print $2}')"
     block "echo 'exposure_dynamic_framerate = ${CUR:-unknown}'; timeout 30 ffmpeg -hide_banner -f v4l2 -input_format mjpeg -video_size 1920x1080 -framerate 30 -i /dev/video0 -t 5 -f null - 2>&1 | grep -oE 'fps= *[0-9]+' | tail -1"
   else
