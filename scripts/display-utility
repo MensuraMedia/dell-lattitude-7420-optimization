@@ -18,6 +18,9 @@
 #   display-utility restore             # re-apply the remembered layout
 #   display-utility autostart on|off    # re-apply it automatically at login
 #   display-utility status              # what is active right now
+#   display-utility menu                # graphical picker (zenity) — used by the menu entry
+#   display-utility install-menu        # add it to the applications menu
+#   display-utility remove-menu         # take it back out
 #
 # Options:
 #   -y, --yes       skip the keep-or-revert confirmation
@@ -34,7 +37,8 @@ STATE="$HOME/.local/state/display-utility/layout"
 AUTOSTART="$HOME/.config/autostart/display-utility-restore.desktop"
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 TIMEOUT=15
-YES=0; QUIET=0
+YES=0; QUIET=0; GUI=0
+DESKTOP_FILE="$HOME/.local/share/applications/display-utility.desktop"
 
 R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; C=$'\033[36m'; B=$'\033[1m'; N=$'\033[0m'
 say()  { (( QUIET )) || printf '%s\n' "$*"; }
@@ -101,6 +105,18 @@ apply() {                      # apply "$@" as xrandr args, with revert guard
     err "xrandr rejected that layout; nothing changed"; return 1
   fi
   (( YES )) && { say "${G}applied.${N}"; return 0; }
+  if (( GUI )); then
+    # zenity --question: 0 = Yes, 1 = No, 5 = timed out. Treat anything but Yes
+    # as revert, so walking away from a broken layout fixes itself.
+    if zenity --question --title="Display Utility" --timeout="$TIMEOUT" \
+              --ok-label="Keep" --cancel-label="Revert" \
+              --text="Keep this display layout?\n\nReverting automatically in ${TIMEOUT}s." 2>/dev/null; then
+      return 0
+    fi
+    xrandr "${prev[@]}" 2>/dev/null
+    zenity --info --title="Display Utility" --text="Reverted to the previous layout." 2>/dev/null &
+    return 1
+  fi
   if [[ ! -t 0 ]]; then say "${G}applied${N} (non-interactive: no revert guard)"; return 0; fi
   printf '\n  %sKeep this layout?%s [y/N] — reverting in %ss if there is no answer: ' "$B" "$N" "$TIMEOUT"
   local a=""; read -r -t "$TIMEOUT" a || true; echo
@@ -201,6 +217,69 @@ cmd_status() {
   cmd_autostart
 }
 
+cmd_menu() {
+  command -v zenity >/dev/null || die "zenity not installed — use the command line instead"
+  GUI=1; QUIET=1
+  local rows=() i=1 o label
+  for o in "${OUTPUTS[@]}"; do
+    local geo; geo=$(xrandr --query | grep -E "^$o connected" | grep -oE '[0-9]+x[0-9]+' | head -1)
+    label="Only display $i  —  $o"
+    [[ -n "$geo" ]] && label="$label  ($geo)"
+    is_primary "$o" && label="$label  ★ primary"
+    rows+=( "$label" ); i=$((i+1))
+  done
+  (( ${#OUTPUTS[@]} > 1 )) && rows+=( "Join all displays  —  extend, left to right" "Mirror all displays" )
+  rows+=( "Save current layout as the login default" )
+
+  local choice n
+  choice=$(zenity --list --title="Display Utility" \
+      --text="$(printf '%d display(s) connected. Choose a layout:' "${#OUTPUTS[@]}")" \
+      --column="Action" "${rows[@]}" --height=320 --width=460 2>/dev/null) || exit 0
+  [[ -n "$choice" ]] || exit 0
+
+  case "$choice" in
+    "Only display "*)
+        # the row reads "Only display 2  —  HDMI-1  (2560x1080)"; take just the number,
+        # or resolve() sees the whole label and rejects it as not-a-number
+        n="${choice#Only display }"; cmd_only "${n%% *}" ;;
+    "Join all"*)      cmd_join ;;
+    "Mirror all"*)    cmd_mirror ;;
+    "Save current"*)  cmd_save_quiet
+                      zenity --info --title="Display Utility" \
+                             --text="Saved. This layout will be re-applied at login." 2>/dev/null ;;
+  esac
+}
+
+cmd_install_menu() {
+  mkdir -p "$(dirname "$DESKTOP_FILE")"
+  cat > "$DESKTOP_FILE" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Display Utility
+GenericName=Monitor Layout
+Comment=Show one monitor only, extend, or mirror — the single-display option Cinnamon omits
+Exec=$SELF menu
+Icon=preferences-desktop-display
+Terminal=false
+StartupNotify=false
+Categories=Settings;HardwareSettings;
+Keywords=display;displays;monitor;monitors;screen;screens;xrandr;resolution;external;hdmi;projector;dual;single;layout;
+DESKTOP
+  chmod 644 "$DESKTOP_FILE"
+  command -v update-desktop-database >/dev/null && \
+    update-desktop-database "$(dirname "$DESKTOP_FILE")" 2>/dev/null
+  say "${G}added to the applications menu${N} -> $DESKTOP_FILE"
+  say "  ${C}search the menu for 'display', 'monitor' or 'screen'${N}"
+}
+
+cmd_remove_menu() {
+  rm -f "$DESKTOP_FILE"
+  command -v update-desktop-database >/dev/null && \
+    update-desktop-database "$(dirname "$DESKTOP_FILE")" 2>/dev/null
+  say "${Y}removed from the applications menu${N}"
+}
+
 case "${1:-list}" in
   list|ls)    cmd_list ;;
   only|single) shift; cmd_only "$@" ;;
@@ -210,5 +289,8 @@ case "${1:-list}" in
   restore)    cmd_restore ;;
   autostart)  shift; cmd_autostart "$@" ;;
   status)     cmd_status ;;
+  menu)       cmd_menu ;;
+  install-menu) cmd_install_menu ;;
+  remove-menu)  cmd_remove_menu ;;
   *)          die "unknown command '$1' (try: display-utility --help)" ;;
 esac
