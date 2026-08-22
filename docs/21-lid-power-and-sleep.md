@@ -369,6 +369,17 @@ EOF
 sudo systemctl restart systemd-logind      # ⚠️ can end the graphical session
 ```
 
+Or let the tooling do it, which prints the effect and asks first — and if you are
+about to reboot anyway, skip the `restart` entirely and let the boot apply it:
+
+```bash
+sudo scripts/lid-dock-handoff.sh --apply-lid-dropin
+```
+
+`scripts/lid-dock-handoff.sh` with no arguments is a read-only post-reboot report
+for this workstream: lid and sleep posture, dock/network/display state, power, what
+this session changed, and what is still outstanding.
+
 That removes the dependency on a running desktop entirely: the lid becomes inert
 at every stage of boot and session lifecycle. Suspend remains available on demand
 (`systemctl suspend`, the menu, idle timeouts) — only the *lid* stops being a
