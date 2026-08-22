@@ -495,3 +495,24 @@ exactly the state `PowerOnLidOpen` acts from.
 | 🟡 | Hibernate: apply the polkit rule and test, or record the decision not to. |
 | 🟡 | Audit whether anything else was changed manually in the undocumented 2026-08-16 23:29 session. |
 | 🟡 | **Lid close is inert only while a Cinnamon session runs** — `csd-power`'s inhibitor does not exist at the greeter or on a TTY, where `HandleLidSwitch=suspend` now applies. Drop-in to make it unconditional is in [21 §7](21-lid-power-and-sleep.md); recommended for docked/KVM use, **not applied**. |
+
+### Follow-up — drive migration documentation (same day)
+
+Documentation only; no change to the machine. Two hardware facts were established
+that were not previously recorded anywhere in this repo:
+
+| Finding | Evidence | Consequence |
+|---|---|---|
+| **The SSD slot is PCIe 4.0 x4, not 3.0** — root port `00:06.0` advertises `LnkCap 16GT/s`, CPU-attached. `LnkSta` reads 8GT/s only because the KIOXIA BG4 is a Gen3 part | `lspci -vv -s 00:06.0` | A Gen4 replacement negotiates Gen4. `docs/01` previously recorded only the endpoint's link and implied Gen3 was the ceiling |
+| **The M.2 2230 WWAN slot is occupied and is USB-wired** — Dell **DW5829e-eSIM** Snapdragon X20 LTE on USB bus 004 | `lsusb`, `lspci` | Rules out the widely-circulated "put a 2230 SSD in the spare WWAN slot" trick on this unit, twice over |
+
+Also noted: the SD card reader is a Realtek **RTS525A** at `72:00.0` — **PCIe**-attached
+rather than USB, which makes it better than the usual laptop card reader.
+
+### Added
+
+- `docs/22-drive-migration.md` — clone procedure, ten copy methods compared, M.2
+  selection criteria, other storage expansion paths
+- `docs/01` — endpoint vs slot link rows, Gen4 note, upgrade pointer
+- `docs/02` — §9's 4 KiB LBA opportunity re-opened now that dual-boot is gone, with
+  the clone-vs-rebuild tradeoff it implies
