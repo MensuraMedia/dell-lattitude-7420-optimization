@@ -11,7 +11,7 @@
 # Prints:
 #   1. Machine and session identity      (+ how to resume the Claude session)
 #   2. Lid & sleep posture               (the thing most likely to regress)
-#   3. Dock, network and display
+#   3. Dock, network and display  (incl. display-utility persistence state)
 #   4. Power                             (this machine's standing hazard)
 #   5. What this session changed         (persistent vs volatile)
 #   6. Outstanding decisions
@@ -129,12 +129,37 @@ echo
 row "USB hubs attached"   "$(lsusb 2>/dev/null | grep -ci 'hub' )"
 row "thunderbolt devices" "$(boltctl list 2>/dev/null | grep -c '●' || true)"
 echo
+# DRM "connected" means a panel is attached, NOT that it is being driven — an
+# output switched off by display-utility still reads connected. Report both.
 for c in /sys/class/drm/card*-*/status; do
   s=$(cat "$c"); n=$(basename "${c%/status}")
-  [[ "$s" == connected ]] && row "display $n" "$(ok)  connected"
+  [[ "$s" == connected ]] || continue
+  xn=${n#card*-}; xn=${xn/HDMI-A-/HDMI-}
+  if DISPLAY=:0 xrandr --query 2>/dev/null | grep -qE "^$xn connected.*[0-9]+x[0-9]+\+"; then
+    row "display $xn" "$(ok)  attached, active"
+  else
+    row "display $xn" "$(ok)  attached, $(printf '%soff%s' "$Y" "$N")"
+  fi
 done
 row "active geometry"     "$(DISPLAY=:0 xrandr --query 2>/dev/null | head -1 | grep -oP 'current \K[0-9x ]+' || echo '?')"
-note "layout persists via ~/.config/cinnamon-monitors.xml — verify it survived this boot."
+echo
+DU_STATE="$HOME/.local/state/display-utility/layout"
+DU_AUTO="$HOME/.config/autostart/display-utility-restore.desktop"
+DU_MENU="$HOME/.local/share/applications/display-utility.desktop"
+if command -v display-utility >/dev/null 2>&1; then
+  row "display-utility"    "$(ok)  on PATH"
+  [[ -f "$DU_STATE" ]] && row "  saved layout"   "$(ok)  $(tr '\n' ' ' < "$DU_STATE" | grep -oE '\-\-output [A-Za-z0-9-]+ (--off|--mode [0-9x]+)' | paste -sd', ')" \
+                       || row "  saved layout"   "$(warn)  none — run: display-utility save"
+  [[ -f "$DU_AUTO" ]]  && row "  login autostart" "$(ok)  enabled" \
+                       || row "  login autostart" "$(warn)  off — the layout will NOT survive login"
+  [[ -f "$DU_MENU" ]]  && row "  menu entry"      "$(ok)  present" \
+                       || row "  menu entry"      "$(warn)  absent — run: display-utility install-menu"
+else
+  row "display-utility"    "$(warn)  not on PATH — symlink ~/.local/bin/display-utility"
+fi
+note "Cinnamon writes ~/.config/cinnamon-monitors.xml but did NOT honour it across the"
+note "2026-08-22 reboot — the internal panel came back primary and extended. That is why"
+note "display-utility's autostart exists; do not treat the .xml as proof of persistence."
 
 # ─────────────────────────────────────────────────────────── 4. power
 hdr "4. Power  — this machine's standing hazard"
@@ -155,9 +180,21 @@ note "Treat the barrel charger as part of the dock, not an optional extra."
 hdr "5. What the 2026-08-22 session changed"
 printf '  %s-- persistent (survives reboot) --%s\n' "$C" "$N"
 row "sleep targets unmasked"       "$(dp '! systemctl is-enabled sleep.target 2>/dev/null | grep -q masked')"
-row "logind lid drop-in"           "$(dp "test -f $DROPIN")"
+# Present on disk is NOT the same as in effect: logind reads its config once, at
+# start. The 2026-08-22 drop-in was written after logind had already started, so
+# it sat there inert until the next boot. Report the EFFECTIVE value, not the file.
+if [[ -f "$DROPIN" ]] && [[ "$(lg HandleLidSwitch)" == "ignore" ]]; then
+  row "logind lid drop-in"         "$(printf '%sDONE%s' "$G" "$N")  installed and in effect"
+elif [[ -f "$DROPIN" ]]; then
+  row "logind lid drop-in"         "$(pend)  installed but NOT active — needs a reboot"
+else
+  row "logind lid drop-in"         "$(pend)  not installed"
+fi
 row "docs 21/22/23 on main"        "$(dp "test -f $REPO_DIR/docs/21-lid-power-and-sleep.md -a -f $REPO_DIR/docs/22-drive-migration.md -a -f $REPO_DIR/docs/23-camera-and-imaging.md")"
-row "display layout saved"         "$(dp 'test -f $HOME/.config/cinnamon-monitors.xml')"
+row "display-utility on PATH"      "$(dp 'command -v display-utility')"
+row "display layout saved"         "$(dp 'test -f $HOME/.local/state/display-utility/layout')"
+row "layout re-applied at login"   "$(dp 'test -f $HOME/.config/autostart/display-utility-restore.desktop')"
+row "display-utility menu entry"   "$(dp 'test -f $HOME/.local/share/applications/display-utility.desktop')"
 printf '\n  %s-- NOT changed, deliberately --%s\n' "$C" "$N"
 note "PowerOnLidOpen — still Enabled (wanted, see §2)"
 note "Cinnamon lid action — still 'blank', not 'suspend'"
